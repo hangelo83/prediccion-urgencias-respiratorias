@@ -1,0 +1,36 @@
+# Control de versiones / caches / secretos
+.git
+.gitignore
+__pycache__/
+*.pyc
+.env
+
+# Agent & AI contexts
+.agent/
+.claude/
+
+# Datasets y material pesado — NO necesarios en runtime
+# (panel.parquet ya viene pre-construido en app_dashboard/data/)
+dataset_salud/*
+!dataset_salud/ambiente_comuna_semana.parquet
+!dataset_salud/clima_dmc_semana.parquet
+dataset_mp25/
+notebooks/
+Documentacion_curso/
+tabfm/
+historico/
+app_dashboard/historico/
+specs/
+_scripts_archivados/
+
+# Scripts de build/dev (antes ignorados, ahora necesarios en runtime para el ETL manual)
+extraer_pildoras.py
+generar_datos_mapa.py
+serve_presentacion.py
+*.code-workspace
+
+# Presentaciones antiguas / copias (runtime solo sirve presentacion_resultados_v2.html)
+presentacion_resultados.html
+presentacion_resultados_v2 copy.html
+.venv_tabfm/
+.venv/

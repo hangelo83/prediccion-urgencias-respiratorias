@@ -1,0 +1,33 @@
+﻿# Python
+__pycache__/
+*.pyc
+.env
+.venv/
+.venv_tabfm/
+
+# Agent & AI contexts
+.agent/
+.claude/
+entregas/
+
+# Datasets pesados
+*.parquet
+!dataset_salud/ambiente_comuna_semana.parquet
+!dataset_salud/clima_dmc_semana.parquet
+*.csv
+*.xlsx
+*.pdf
+dataset_mp25/
+dataset_salud/dmc_raw/
+dataset_salud/sinca_raw/
+dataset_salud/historico/
+
+Documentacion_curso/
+tabfm/
+/historico/
+app_dashboard/historico/
+specs/
+_scripts_archivados/
+
+# Generados en dashboard
+app_dashboard/data/

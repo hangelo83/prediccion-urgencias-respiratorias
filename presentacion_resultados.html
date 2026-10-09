@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentación de Resultados · Alerta Temprana de Urgencias · Diplomado ML</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Leaflet (mapa) — mismo que el dashboard del proyecto -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="entregas/datos_mapa.js"></script>
+
+    <style>
+        :root {
+            /* Paleta base — dark premium */
+            --brand-blue: #009EF7;
+            --brand-sky: #1090CD;
+            --brand-green: #D0F500;
+            --brand-pink: #FF338D;
+            --brand-orange: #FF7A00;
+
+            --bg-color: #030811;
+            --glass-bg: rgba(10, 20, 35, 0.62);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #FFFFFF;
+            --text-muted: #94A3B8;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Fondo animado */
+        .bg-blobs { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; z-index: 0; transform: translateZ(0); }
+        .blob { position: absolute; filter: blur(80px); opacity: 0.5; animation: float 20s infinite alternate; }
+        .blob-1 { background: var(--brand-blue); width: 40vw; height: 40vw; top: -10%; left: -10%; border-radius: 50%; }
+        .blob-2 { background: var(--brand-green); width: 30vw; height: 30vw; bottom: -10%; right: -10%; border-radius: 50%; animation-delay: -5s; }
+        .blob-3 { background: #4F46E5; width: 35vw; height: 35vw; top: 40%; left: 40%; border-radius: 50%; animation-delay: -10s; }
+        @keyframes float { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(10%, 15%) scale(1.2); } }
+
+        /* Contenedor */
+        .presentation-container {
+            position: relative;
+            width: 92vw;
+            max-width: 1440px;
+            height: 86vh;
+            z-index: 10;
+        }
+
+        /* Láminas */
+        .slide {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--glass-bg);
+            /* Sin backdrop-filter: los blobs de fondo ya vienen con blur(80px);
+               un segundo blur aquí era casi invisible pero forzaba recomposición
+               en cada hover -> parpadeo de capas. Se elimina para estabilizar el render. */
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            padding: 50px 70px;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            /* Evita el bug de recorte geométrico de Chromium obligando al navegador a respetar
+               el tamaño 100%x100% como un bloque aislado (sin clip) y sin depender de sus hijos. */
+            contain: size layout;
+            /* Transición 2D (sin translateZ/rotateX/perspective): las transformaciones 3D
+               dejaban capas GPU residuales -> láminas "fantasma" al pasar el mouse. */
+            transform: translateY(28px) scale(0.99);
+            transition: all 0.55s cubic-bezier(0.19, 1, 0.22, 1);
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .slide.active {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            visibility: visible;
+            pointer-events: auto;
+            z-index: 5;
+        }
+        .slide.prev-slide {
+            opacity: 0;
+            transform: translateY(-28px) scale(0.99);
+            z-index: 4;
+        }
+
+        /* Aparición escalonada */
+        .slide .stagger { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1); }
+        .slide.active .stagger { opacity: 1; transform: translateY(0); }
+        .slide.active .delay-1 { transition-delay: 0.15s; }
+        .slide.active .delay-2 { transition-delay: 0.3s; }
+        .slide.active .delay-3 { transition-delay: 0.45s; }
+        .slide.active .delay-4 { transition-delay: 0.6s; }
+
+        h1, h2, h3 { font-family: 'Outfit', sans-serif; margin: 0; }
+
+        .title {
+            font-size: 4.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFF 0%, var(--brand-blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.08;
+            margin-bottom: 20px;
+        }
+        .subtitle { font-size: 1.7rem; color: var(--text-muted); font-weight: 300; line-height: 1.4; }
+
+        .slide-header { display: flex; align-items: center; gap: 20px; margin-bottom: 28px; }
+        .slide-header .num {
+            font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.4rem;
+            width: 52px; height: 52px; flex-shrink: 0;
+            display: grid; place-items: center;
+            border-radius: 14px;
+            color: var(--brand-blue);
+            background: rgba(0,158,247,0.12);
+            border: 1px solid rgba(0,158,247,0.4);
+        }
+        .slide-header h2 { font-size: 2.7rem; font-weight: 700; color: #FFF; }
+        .slide-header .accent-line { height: 3px; flex-grow: 1; background: linear-gradient(90deg, var(--brand-blue) 0%, transparent 100%); border-radius: 2px; }
+
+        .content { font-size: 1.3rem; line-height: 1.6; color: var(--text-muted); flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+        .slide-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+
+        strong { color: #FFF; font-weight: 600; }
+        .highlight { color: var(--brand-green); }
+        .highlight-blue { color: var(--brand-blue); }
+        .highlight-orange { color: var(--brand-orange); }
+        .highlight-pink { color: var(--brand-pink); }
+
+        .badge {
+            display: inline-block; background: rgba(0, 158, 247, 0.1);
+            border: 1px solid var(--brand-blue); color: var(--brand-blue);
+            padding: 8px 20px; border-radius: 30px; font-size: 0.95rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 2px; margin-bottom: 26px;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px; padding: 26px;
+            transition: all 0.4s ease; position: relative; overflow: hidden;
+        }
+        .glass-card:hover { transform: translateY(-8px); background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .glass-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+        .card-blue::before { background: var(--brand-blue); }
+        .card-green::before { background: var(--brand-green); }
+        .card-orange::before { background: var(--brand-orange); }
+        .card-pink::before { background: var(--brand-pink); }
+        .glass-card h3 { font-size: 1.5rem; margin-bottom: 8px; color: #FFF; }
+        .glass-card p { font-size: 1.05rem; margin: 0; }
+
+        .big-stat { font-size: 5.5rem; font-family: 'Outfit', sans-serif; font-weight: 800; color: var(--brand-green); line-height: 1; margin-bottom: 6px; }
+        .stat-row { display: flex; gap: 26px; flex-wrap: wrap; }
+        .stat-mini { text-align: center; }
+        .stat-mini .n { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 2.6rem; line-height: 1; }
+        .stat-mini .l { font-size: 0.9rem; color: var(--text-muted); margin-top: 6px; }
+
+        .list-premium { list-style: none; padding: 0; margin: 0; }
+        .list-premium li { position: relative; padding-left: 28px; margin-bottom: 14px; }
+        .list-premium li::before { content: '→'; position: absolute; left: 0; color: var(--brand-blue); font-weight: bold; }
+
+        /* Fila de iconos (los "overs") */
+        .icon-hint { font-size: 0.9rem; color: var(--text-muted); margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
+        .icon-hint .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-green); box-shadow: 0 0 10px var(--brand-green); animation: blink 1.6s infinite; }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+        .icon-row { display: flex; gap: 14px; flex-wrap: wrap; }
+        .icon-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-radius: 44px; padding: 9px 20px 9px 9px;
+            cursor: pointer; transition: all 0.3s ease; user-select: none;
+        }
+        .icon-chip:hover { background: rgba(0,158,247,0.12); border-color: var(--brand-blue); transform: translateY(-5px); box-shadow: 0 14px 28px rgba(0,0,0,0.4); }
+        .icon-chip .chip-emoji { font-size: 1.4rem; width: 42px; height: 42px; display: grid; place-items: center; background: rgba(255,255,255,0.07); border-radius: 50%; flex-shrink: 0; }
+        .icon-chip:hover .chip-emoji { background: rgba(0,158,247,0.22); }
+        .icon-chip .chip-txt { display: flex; flex-direction: column; line-height: 1.15; }
+        .icon-chip .chip-label { font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; color: #FFF; }
+        .icon-chip .chip-sub { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Tarjetas de "Factores Dominantes" (clickeables) */
+        .factor-card { cursor: pointer; transition: all 0.25s ease; border: 1px solid rgba(255,255,255,0.06); position: relative; }
+        .factor-card:hover { background: rgba(0,158,247,0.10); border-color: var(--brand-blue); transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.35); }
+        .factor-card .factor-hint { font-size: 0.68rem; color: #64748b; letter-spacing: 0.3px; transition: color 0.25s ease; }
+        .factor-card:hover .factor-hint { color: #93c5fd; }
+
+        /* Píldoras de datos (cápsulas estáticas) */
+        .pill-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 28px; }
+        .pill {
+            flex: 1 1 0; min-width: 165px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 16px; padding: 16px 18px;
+            display: flex; align-items: center; gap: 14px; transition: all 0.3s ease;
+        }
+        .pill:hover { background: rgba(255,255,255,0.05); transform: translateY(-4px); border-color: rgba(0,158,247,0.3); }
+        .pill .p-ico { font-size: 1.6rem; width: 46px; height: 46px; display: grid; place-items: center; background: rgba(255,255,255,0.05); border-radius: 12px; flex-shrink: 0; }
+        .pill .p-num { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.7rem; line-height: 1; color: var(--brand-green); }
+        .pill .p-lbl { font-size: 0.82rem; color: var(--text-muted); margin-top: 5px; line-height: 1.25; }
+        .pill.blue .p-num { color: var(--brand-blue); }
+        .pill.orange .p-num { color: var(--brand-orange); }
+        .pill.pink .p-num { color: var(--brand-pink); }
+
+        /* Lámina Contexto — estilo editorial */
+        .ctx-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 44px; align-items: center; }
+        .big-statement { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 2.3rem; line-height: 1.12; color: #fff; margin-bottom: 14px; }
+        .big-statement .hl-orange { color: var(--brand-orange); }
+        .hero-2m { display: flex; align-items: center; gap: 22px; margin-top: 26px; }
+        .hero-num { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 3.6rem; line-height: 0.9; color: var(--brand-orange); }
+        .hero-lbl { font-size: 1rem; color: var(--text-muted); margin-top: 8px; max-width: 240px; line-height: 1.35; }
+        .hero-lbl strong { color: #fff; }
+        .mosaic { display: grid; grid-template-columns: repeat(8, 9px); grid-auto-rows: 9px; gap: 3px; flex-shrink: 0; }
+        .mosaic i { background: var(--brand-blue); border-radius: 2px; display: block; }
+
+        .ctx-metaphor { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; padding: 24px 26px; }
+        .metaphor-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--brand-blue); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 20px; }
+        .metaphor { display: flex; align-items: flex-end; justify-content: center; gap: 22px; }
+        .unit { text-align: center; }
+        .unit-viz { position: relative; display: inline-block; padding: 6px; }
+        .cells { display: grid; grid-template-columns: repeat(7, 13px); grid-auto-rows: 13px; gap: 3px; }
+        .cells .cell { background: #33465e; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); }
+        .bricks { display: grid; grid-template-columns: repeat(3, 22px); grid-auto-rows: 11px; gap: 3px; }
+        .bricks .brick { background: #9a4f38; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+        .alert-tri { position: absolute; top: -9px; right: -9px; width: 24px; height: 24px; background: #FF3B30; color: #fff; border-radius: 7px; display: grid; place-items: center; font-size: 0.9rem; font-weight: 800; box-shadow: 0 3px 8px rgba(0,0,0,0.55); z-index: 2; }
+        .u-name { font-family: 'Outfit', sans-serif; font-weight: 700; color: #fff; font-size: 1rem; margin-top: 12px; }
+        .u-tag { font-size: 0.82rem; font-weight: 600; margin-top: 2px; }
+        .u-tag.ok { color: var(--brand-green); }
+        .u-tag.bad { color: var(--brand-pink); }
+        .vs { font-size: 1.8rem; color: var(--text-muted); align-self: center; padding-bottom: 26px; }
+        .metaphor-cap { font-size: 0.98rem; color: var(--text-muted); margin-top: 20px; line-height: 1.5; }
+        .metaphor-cap strong { color: #fff; }
+
+        /* Pill del mapa + chip del listado (Contexto) */
+        .ctx-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; align-items: flex-start; }
+        .map-pill { display: flex; align-items: center; gap: 14px; background: rgba(0,158,247,0.10); border: 1px solid rgba(0,158,247,0.5); border-radius: 44px; padding: 9px 24px 9px 9px; cursor: pointer; transition: all .3s ease; }
+        .map-pill:hover { background: rgba(0,158,247,0.2); transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,0,0,.35); }
+        .map-pill .mp-ico { font-size: 1.5rem; width: 46px; height: 46px; display: grid; place-items: center; background: rgba(255,255,255,0.08); border-radius: 50%; flex-shrink: 0; }
+        .mp-title { font-family: 'Outfit', sans-serif; font-weight: 700; color: #fff; font-size: 1.05rem; }
+        .mp-sub { font-size: 0.8rem; color: var(--text-muted); }
+        .list-chip { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--brand-green); font-weight: 600; font-size: 0.95rem; padding: 4px 6px; transition: all .2s ease; }
+        .list-chip:hover { color: #fff; transform: translateX(3px); }
+
+        /* Modal ancho (mapa) + mapa + listado */
+        .modal-content.modal-wide { max-width: 1440px; width: 98%; max-height: 96vh; padding: 20px 30px; }
+        #map-rm { width: 100%; height: 58vh; min-height: 400px; border-radius: 14px; overflow: hidden; background: #0a1423; border: 1px solid rgba(255,255,255,0.08); }
+        .leaflet-popup-content { font-family: 'Inter', sans-serif; font-size: 0.9rem; }
+        .map-legend { background: rgba(10,20,35,0.9); padding: 9px 11px; border-radius: 8px; font-size: 0.72rem; color: #fff; line-height: 1.7; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .map-legend b { display:block; margin-bottom:4px; font-family:'Outfit',sans-serif; font-size:0.72rem; letter-spacing:0.5px; color:var(--text-muted); text-transform:uppercase; }
+        .map-legend span { display: flex; align-items: center; gap: 7px; }
+        .map-legend i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex-shrink:0; }
+        .listado-centros { columns: 2; column-gap: 30px; }
+        .modal-wide .listado-centros { columns: 4; column-gap: 30px; }
+        .lc-com { break-inside: avoid; margin-bottom: 8px; }
+        .lc-com h4 { color: var(--brand-blue); font-family: 'Outfit', sans-serif; font-size: 0.95rem; margin: 0 0 3px; }
+        .lc-com h4 span { color: var(--text-muted); font-weight: 400; font-size: 0.75rem; }
+        .lc-com ul { list-style: none; padding: 0; margin: 0; }
+        .lc-com li { font-size: 0.8rem; padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: #e2e8f0; }
+        .lc-com li em { color: var(--text-muted); font-style: normal; font-size: 0.7rem; margin-left: 4px; }
+
+        .fuente-card { cursor: pointer; transition: all 0.3s ease; }
+        .fuente-card:hover { background: rgba(255,255,255,0.08) !important; transform: translateX(5px); }
+
+        img.slide-img { border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); max-width: 100%; }
+
+        /* Controles */
+        .controls {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 20px; z-index: 100;
+            background: rgba(0,0,0,0.66); padding: 10px 30px; border-radius: 40px;
+            /* Sin backdrop-filter: evita el parpadeo de capas al hacer hover sobre las flechas
+               (mismo motivo que en .slide). El fondo más opaco mantiene el aspecto de píldora. */
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-nav { background: transparent; border: none; color: #FFF; font-size: 2rem; cursor: pointer; transition: all 0.2s; opacity: 0.6; line-height: 1; }
+        .btn-nav:hover { opacity: 1; transform: scale(1.2); color: var(--brand-blue); }
+        .btn-nav:disabled { opacity: 0.2; cursor: not-allowed; }
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 50%; transition: all 0.4s; cursor: pointer; }
+        .dot.active { background: var(--brand-green); transform: scale(1.5); box-shadow: 0 0 10px var(--brand-green); }
+        .slide-counter { position: absolute; top: 26px; right: 34px; font-family: 'Outfit', sans-serif; font-size: 0.85rem; color: var(--text-muted); letter-spacing: 1px; z-index: 20; }
+
+        /* Overs / Modales */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            display: flex; justify-content: center; align-items: center; z-index: 1000;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background: rgba(20, 30, 50, 0.9);
+            border: 1px solid var(--brand-blue); border-radius: 24px;
+            padding: 40px 44px; max-width: 780px; width: 90%; max-height: 82vh; overflow-y: auto;
+            transform: translateY(50px); transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.2); position: relative;
+        }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+        .modal-close { position: absolute; top: 18px; right: 22px; background: transparent; border: none; color: #FFF; font-size: 2rem; cursor: pointer; transition: color 0.2s; line-height: 1; }
+        .modal-close:hover { color: var(--brand-pink); }
+        .modal-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+        .modal-head .m-emoji { font-size: 2rem; width: 56px; height: 56px; display: grid; place-items: center; background: rgba(0,158,247,0.15); border-radius: 16px; flex-shrink: 0; }
+        .modal-head h3 { color: #FFF; font-size: 1.7rem; }
+        .modal-content p { font-size: 1.12rem; line-height: 1.6; }
+        .modal-content .list-premium li { font-size: 1.1rem; }
+
+        table.mtab { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 1.02rem; }
+        table.mtab th, table.mtab td { text-align: left; padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        table.mtab th { color: var(--brand-blue); font-family: 'Outfit', sans-serif; font-weight: 600; }
+        table.mtab td.win { color: var(--brand-green); font-weight: 600; }
+        .code-box { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 20px; font-family: 'Outfit', monospace; font-size: 1rem; color: var(--brand-green); line-height: 1.7; margin: 12px 0; }
+
+        @media (max-width: 900px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .slide { padding: 34px 30px; }
+            .title { font-size: 2.8rem; }
+            .slide-header h2 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="slide-counter" id="slide-counter">01 / 08</div>
+
+    <div class="presentation-container">
+
+        <!-- ===================== PORTADA ===================== -->
+        <div class="slide active" id="slide-0" style="justify-content: center; align-items: center; text-align: center;">
+            <div class="stagger delay-1 badge">Machine Learning Predictivo · Diplomado ML</div>
+            <h1 class="stagger delay-2 title">Alerta Temprana de Sobrecarga<br>en Urgencias Respiratorias</h1>
+            <p class="stagger delay-3 subtitle">Un “radar” que anticipa, con <strong style="color:var(--brand-green)">una semana</strong> de antelación,<br>qué centro de salud se va a saturar.</p>
+            <p class="stagger delay-4" style="margin-top:40px; font-size:1.1rem; color:var(--text-muted);">
+                Proyecto Capstone &nbsp;·&nbsp; Diplomado en Machine Learning
+            </p>
+        </div>
+
+        <!-- ===================== 1 · CONTEXTO ===================== -->
+        <div class="slide" id="slide-1">
+            <div class="slide-header stagger delay-1">
+                <div class="num">1</div>
+                <h2>Contexto</h2>
+                <div class="accent-line"></div>
+            </div>
+            <div class="content">
+                <div class="slide-body">
+                    <div class="ctx-grid">
+                        <div class="stagger delay-2">
+                            <div class="big-statement">La saturación no es solo “llega mucha gente”:<br>es un problema de <span class="hl-orange">distribución</span>.</div>
+                            <p style="font-size:1.12rem;">Cada invierno, <strong>bronquitis, neumonías, influenza y VRS</strong> saturan la red — y ese volumen total ya se planifica. Lo que no se anticipa es <em>dónde</em>: la carga se reparte <strong class="highlight-blue">despareja</strong> y cambia semana a semana. Un centro colapsa mientras otro cercano tiene capacidad, con alzas de hasta <strong>+306%</strong> en una sola semana, y <strong>1 de cada 4</strong> semanas-centro termina en sobrecarga.</p>
+                            <div class="hero-2m">
+                                <div class="mosaic" id="mosaic"></div>
+                                <div>
+                                    <div class="hero-num">~2 M</div>
+                                    <div class="hero-lbl">atenciones respiratorias analizadas en 4 años, para entender los patrones de demanda</div>
+                                </div>
+                            </div>
+                            <div class="ctx-actions">
+                                <div class="map-pill" onclick="openModal('m-ctx-mapa')">
+                                    <span class="mp-ico">🗺️</span>
+                                    <div>
+                                        <div class="mp-title">49 centros · 11 comunas</div>
+                                        <div class="mp-sub">ver mapa geográfico de la Región Metropolitana</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stagger delay-3 ctx-metaphor">
+                            <div class="metaphor-title">El fallo de las reglas fijas</div>
+                            <div class="metaphor">
+                                <div class="unit">
+                                    <div class="unit-viz"><span class="alert-tri">!</span><div class="cells" id="cells-hospital"></div></div>
+                                    <div class="u-name">Hospital grande</div>
+                                    <div class="u-tag ok">Normal</div>
+                                </div>
+                                <div class="vs">≠</div>
+                                <div class="unit">
+                                    <div class="unit-viz"><span class="alert-tri">!</span><div class="bricks" id="cells-sapu"></div></div>
+                                    <div class="u-name">SAPU pequeño</div>
+                                    <div class="u-tag bad">Catastrófico</div>
+                                </div>
+                            </div>
+                            <p class="metaphor-cap">La <strong>misma cantidad</strong> de pacientes es rutina para un hospital grande y una catástrofe para un SAPU. Por eso una regla fija (“si pasan de X, alerta”) no sirve — y por eso usamos Machine Learning.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="icon-hint stagger delay-3"><span class="pulse"></span> Haz clic en los iconos para ver la información complementaria</div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-ctx-viral')"><span class="chip-emoji">🦠</span><span class="chip-txt"><span class="chip-label">La ola viral</span><span class="chip-sub">qué la genera</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-ctx-distrib')"><span class="chip-emoji">🗺️</span><span class="chip-txt"><span class="chip-label">Distribución despareja</span><span class="chip-sub">el corazón del problema</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-ctx-reaccion')"><span class="chip-emoji">⏱️</span><span class="chip-txt"><span class="chip-label">Reacción tardía</span><span class="chip-sub">cómo se gestiona hoy</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-ctx-listado')"><span class="chip-emoji">📋</span><span class="chip-txt"><span class="chip-label">49 centros</span><span class="chip-sub">ver el listado</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 2 · OBJETIVO ===================== -->
+        <div class="slide" id="slide-2">
+            <div class="slide-header stagger delay-1">
+                <div class="num">2</div>
+                <h2>Objetivo del proyecto</h2>
+                <div class="accent-line"></div>
+            </div>
+            <div class="content">
+                <div class="slide-body">
+                    <div class="ctx-grid">
+                        <div class="stagger delay-2">
+                            <div class="big-statement">Desarrollar un <span class="highlight-blue">radar predictivo</span> para anticipar sobrecargas.</div>
+                            <p style="font-size:1.05rem; margin-top: 15px; color: var(--text-muted); line-height: 1.6;">Mediante <strong>Machine Learning</strong>, el sistema anticipa con <strong class="highlight">una semana de antelación</strong> qué centros específicos sufrirán un colapso por enfermedades respiratorias, permitiendo una gestión proactiva en lugar de reactiva.</p>
+                            
+                            <div class="metaphor-title" style="margin-top:28px;">La Meta Central: Machine Learning vs Reglas Fijas</div>
+                            <div class="metaphor" style="justify-content: flex-start; gap: 20px; margin-top: 12px; padding: 15px;">
+                                <div class="unit" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; flex: 1;">
+                                    <div class="u-name" style="color: var(--brand-pink); font-size:1.05rem; margin-bottom: 5px;">❌ Reglas Fijas</div>
+                                    <div class="u-tag" style="color: var(--text-muted); font-size:0.85rem; line-height: 1.4;">Ineficaces umbrales<br>No considera realidad local</div>
+                                </div>
+                                <div class="unit" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; flex: 1;">
+                                    <div class="u-name" style="color: var(--brand-green); font-size:1.05rem; margin-bottom: 5px;">✅ Machine Learning</div>
+                                    <div class="u-tag" style="color: var(--text-muted); font-size:0.85rem; line-height: 1.4;">Aprende patrones<br>Históricos de cada centro</div>
+                                </div>
+                            </div>
+                            
+                            <div class="pill-row" style="margin-top: 25px;">
+                                <div class="pill"><span class="p-ico">⏱️</span><div><div class="p-num" style="font-size: 1.1rem;">1 semana</div><div class="p-lbl" style="font-size: 0.75rem;">Anticipación</div></div></div>
+                                <div class="pill blue"><span class="p-ico">📍</span><div><div class="p-num" style="font-size: 1.1rem;">49</div><div class="p-lbl" style="font-size: 0.75rem;">Centros de salud</div></div></div>
+                                <div class="pill orange"><span class="p-ico">🔄</span><div><div class="p-num" style="font-size: 1.1rem;">Semanal</div><div class="p-lbl" style="font-size: 0.75rem;">Recalculada</div></div></div>
+                            </div>
+                        </div>
+                        <div class="stagger delay-3 ctx-metaphor">
+                            <div class="metaphor-title">Acciones y Capacidades</div>
+                            <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 16px;">Gestión Preventiva de Recursos</p>
+                            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px;">
+                                <li style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="font-size: 1.4rem; line-height: 1;">👩‍⚕️</div>
+                                    <div><strong style="color: var(--brand-blue); display: block; margin-bottom: 2px;">Reforzar</strong> <span style="font-size: 0.85rem; color: #cbd5e1;">Turnos de médicos y kinesiólogos, solo en los centros en riesgo.</span></div>
+                                </li>
+                                <li style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="font-size: 1.4rem; line-height: 1;">🔀</div>
+                                    <div><strong style="color: var(--brand-green); display: block; margin-bottom: 2px;">Derivar</strong> <span style="font-size: 0.85rem; color: #cbd5e1;">Pacientes hacia centros de la red más descongestionados.</span></div>
+                                </li>
+                                <li style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="font-size: 1.4rem; line-height: 1;">🚑</div>
+                                    <div><strong style="color: var(--brand-orange); display: block; margin-bottom: 2px;">Movilizar</strong> <span style="font-size: 0.85rem; color: #cbd5e1;">Ambulancias (SAMU) de forma preventiva, no reactiva.</span></div>
+                                </li>
+                            </ul>
+                            
+                            <div style="margin-top: 35px; padding-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 20px;">
+                                 <div class="hero-2m" style="margin: 0; flex-shrink: 0; padding: 10px 15px;">
+                                     <div class="num" style="font-size: 3rem;">49</div>
+                                 </div>
+                                 <div style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4;">Alerta individual para 49 centros de la RM con predicción recalculada semanalmente.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-obj-radar')"><span class="chip-emoji">🎯</span><span class="chip-txt"><span class="chip-label">La meta concreta</span><span class="chip-sub">micro-localizada y anticipada</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-obj-ml')"><span class="chip-emoji">🤖</span><span class="chip-txt"><span class="chip-label">¿Por qué Machine Learning?</span><span class="chip-sub">y no una regla fija</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 3 · RECOPILACIÓN DE DATOS ===================== -->
+        <div class="slide" id="slide-3">
+            <div class="slide-header stagger delay-1">
+                <div class="num">3</div>
+                <h2>Recopilación de datos</h2>
+                <div class="accent-line"></div>
+            </div>
+            <div class="content">
+                <div class="slide-body">
+                    <p class="stagger delay-2" style="font-size:1.1rem; color:var(--text-muted); margin-bottom: 20px;">Origen, magnitud y lógica temporal de los datos para el modelo de Machine Learning.</p>
+                    
+                    <div class="ctx-grid">
+                        <div class="stagger delay-3">
+                            <div class="metaphor-title" style="margin-bottom:16px;">Fuentes de Datos Integradas</div>
+                            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px;">
+                                <li class="fuente-card" onclick="openModal('m-fuente-asis')" style="display: flex; gap: 14px; align-items: stretch; background: rgba(255,255,255,0.03); padding: 14px; border-radius: 8px; border-left: 4px solid var(--brand-blue);">
+                                    <div style="font-size: 2rem; display: flex; align-items: center;">🏥</div>
+                                    <div>
+                                        <strong style="color: var(--brand-blue); display: block; font-size: 1.1rem; margin-bottom: 4px;">Datos Asistenciales <span style="color:var(--text-muted); font-size:0.9rem; font-weight:400;">(DEIS / SADU)</span></strong> 
+                                        <span style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.4; display:block; margin-bottom: 8px;">Constituye el núcleo del modelo: registros de atenciones de urgencia y hospitalizaciones por centro.</span>
+                                        <div style="display: flex; gap: 8px; font-size: 0.75rem; flex-wrap: wrap;">
+                                            <span style="background: rgba(0, 158, 247, 0.15); padding: 2px 8px; border-radius: 4px; color: #a4d8fa; font-weight: 500;">📍 Nivel: Centro</span>
+                                            <span style="background: rgba(0, 158, 247, 0.15); padding: 2px 8px; border-radius: 4px; color: #a4d8fa; font-weight: 500;">🔎 Granularidad: Por cada centro (no por paciente)</span>
+                                            <span style="background: rgba(0, 158, 247, 0.15); padding: 2px 8px; border-radius: 4px; color: #a4d8fa; font-weight: 500;">📊 Volumen: ~3.560.000 filas</span>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="fuente-card" onclick="openModal('m-fuente-epi')" style="display: flex; gap: 14px; align-items: stretch; background: rgba(255,255,255,0.03); padding: 14px; border-radius: 8px; border-left: 4px solid var(--brand-green);">
+                                    <div style="font-size: 2rem; display: flex; align-items: center;">🦠</div>
+                                    <div>
+                                        <strong style="color: var(--brand-green); display: block; font-size: 1.1rem; margin-bottom: 4px;">Datos Epidemiológicos <span style="color:var(--text-muted); font-size:0.9rem; font-weight:400;">(FluNet OMS)</span></strong> 
+                                        <span style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.4; display:block; margin-bottom: 8px;">Aporta la positividad viral nacional de Influenza y VRS (% de tests positivos).</span>
+                                        <div style="display: flex; gap: 8px; font-size: 0.75rem; flex-wrap: wrap;">
+                                            <span style="background: rgba(76, 175, 80, 0.15); padding: 2px 8px; border-radius: 4px; color: #a5d6a7; font-weight: 500;">📍 Nivel: País</span>
+                                            <span style="background: rgba(76, 175, 80, 0.15); padding: 2px 8px; border-radius: 4px; color: #a5d6a7; font-weight: 500;">🔎 Granularidad: Muestra consolidada nacional</span>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="fuente-card" onclick="openModal('m-fuente-amb')" style="display: flex; gap: 14px; align-items: stretch; background: rgba(255,255,255,0.03); padding: 14px; border-radius: 8px; border-left: 4px solid var(--brand-orange);">
+                                    <div style="font-size: 2rem; display: flex; align-items: center;">🌫️</div>
+                                    <div>
+                                        <strong style="color: var(--brand-orange); display: block; font-size: 1.1rem; margin-bottom: 4px;">Datos Ambientales <span style="color:var(--text-muted); font-size:0.9rem; font-weight:400;">(SINCA / DMC)</span></strong> 
+                                        <span style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.4; display:block; margin-bottom: 8px;">Calidad del aire (MP2.5), temperatura mínima y precipitaciones para enriquecimiento del modelo.</span>
+                                        <div style="display: flex; gap: 8px; font-size: 0.75rem; flex-wrap: wrap;">
+                                            <span style="background: rgba(255, 122, 0, 0.15); padding: 2px 8px; border-radius: 4px; color: #ffb74d; font-weight: 500;">📍 Nivel: Comuna / Región RM</span>
+                                            <span style="background: rgba(255, 122, 0, 0.15); padding: 2px 8px; border-radius: 4px; color: #ffb74d; font-weight: 500;">🔎 Granularidad: 11 estaciones (aire) + 1 estación (clima)</span>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="stagger delay-4 ctx-metaphor">
+                            <div class="metaphor-title" style="margin-bottom:12px;">Escala y Lógica del Modelo</div>
+                            
+                            <!-- Timeline and 9000 rows -->
+                            <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                                <div style="display: flex; justify-content: space-between; position: relative; padding-bottom: 15px; margin-bottom: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">
+                                    <div style="position: absolute; bottom: -2px; left: 0; width: 48%; height: 2px; background: var(--brand-blue);"></div>
+                                    <div style="position: absolute; bottom: -4px; left: 48%; border-left: 3px solid #0f172a; border-right: 3px solid #0f172a; border-bottom: 12px solid rgba(255,255,255,0.4); width: 4px; transform: skewX(-20deg);"></div>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">2023</span>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">2024</span>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">2025</span>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">2026</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <strong style="font-size: 1.4rem; color: #fff;">~9.000 Filas de Datos</strong>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); width: 45%; line-height: 1.3; margin:0;">Cada registro representa una semana completa de actividad en uno de los 49 centros.</p>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                                <!-- Regla de oro -->
+                                <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+                                    <strong style="display:block; font-size: 0.85rem; color: #fff; margin-bottom: 8px; text-align:center;">Regla de Oro: Sin Fuga</strong>
+                                    <div style="display: flex; height: 36px; border-radius: 4px; overflow: hidden;">
+                                        <div style="background: var(--brand-blue); color: #fff; font-size: 0.7rem; font-weight: bold; flex: 1; display:flex; align-items:center; justify-content:center; text-align:center; padding: 2px;">2 AÑOS ENTR.</div>
+                                        <div style="background: #a88b50; color: #fff; font-size: 0.7rem; font-weight: bold; flex: 1; display:flex; align-items:center; justify-content:center; text-align:center; padding: 2px;">2 AÑOS PRUEBA</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Variables rezagadas -->
+                                <div style="flex: 1; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+                                    <strong style="display:block; font-size: 0.85rem; color: #fff; margin-bottom: 8px; text-align:center;">Variables Rezagadas (Lag t-1)</strong>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.7rem; font-weight: bold; height: 36px;">
+                                        <div style="background: var(--brand-blue); color: #fff; padding: 4px; border-radius: 4px; flex:1; text-align:center;">Semana t-1</div>
+                                        <div style="color: var(--brand-orange); padding: 0 4px;">➔</div>
+                                        <div style="background: #a88b50; color: #fff; padding: 4px; border-radius: 4px; flex:1; text-align:center;">Predicción t</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Resumen del alcance (tabla) -->
+                            <div style="background: rgba(255,255,255,0.03); border-radius: 8px; overflow: hidden; font-size: 0.85rem;">
+                                <div style="background: rgba(255,255,255,0.1); padding: 6px 12px; font-weight: bold; text-align: center; color: #fff; font-size: 0.75rem;">RESUMEN DEL ALCANCE</div>
+                                <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.05);"><div style="width: 45%; padding: 6px 12px; background: rgba(0,0,0,0.2); font-weight: 500; color: #cbd5e1;">Período de Estudio</div><div style="width: 55%; padding: 6px 12px; color: var(--text-muted);">2023 – 2026</div></div>
+                                <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.05);"><div style="width: 45%; padding: 6px 12px; background: rgba(0,0,0,0.2); font-weight: 500; color: #cbd5e1;">Cobertura Territorial</div><div style="width: 55%; padding: 6px 12px; color: var(--text-muted);">49 establecimientos (RM)</div></div>
+                                <div style="display: flex;"><div style="width: 45%; padding: 6px 12px; background: rgba(0,0,0,0.2); font-weight: 500; color: #cbd5e1;">Volumen Pacientes</div><div style="width: 55%; padding: 6px 12px; color: var(--text-muted);">~2.000.000 de atenciones</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-dat-leakage')"><span class="chip-emoji">🔒</span><span class="chip-txt"><span class="chip-label">La regla de oro</span><span class="chip-sub">no mirar el futuro</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-dat-filas')"><span class="chip-emoji">📊</span><span class="chip-txt"><span class="chip-label">¿9.000 filas o 2 millones?</span><span class="chip-sub">cómo se cuenta</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-dat-fuentes')"><span class="chip-emoji">🗂️</span><span class="chip-txt"><span class="chip-label">Ficha de las fuentes</span><span class="chip-sub">nivel territorial y rol</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 4 · CÓMO FUNCIONA EL MODELO ===================== -->
+        <div class="slide" id="slide-4">
+            <div class="slide-header stagger delay-1" style="margin-bottom: 16px; align-items: flex-start;">
+                <div class="num">4</div>
+                <div style="display:flex; flex-direction:column; flex:1;">
+                    <h2 style="text-transform: uppercase; font-size: 2.1rem; line-height: 1.1; margin:0;">Funcionamiento del modelo: Radar de Alerta Temprana</h2>
+                    <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4; max-width: 95%; font-weight: normal; margin: 6px 0 0 0;">El sistema utiliza Machine Learning para anticipar con una semana de antelación qué centros de salud se saturarán.<br>Para lograrlo, el modelo transforma datos históricos en una definición matemática de "colapso" y entrena un algoritmo para identificar patrones de riesgo basados en la inercia del centro y el comportamiento de su red vecina.</p>
+                </div>
+            </div>
+            <div class="content">
+                <div class="slide-body" style="justify-content: flex-start; padding-top: 10px;">
+                    <div class="ctx-grid" style="gap: 20px;">
+                        <!-- Columna Izquierda: Definición del Colapso -->
+                        <div class="stagger delay-2">
+                            <div class="metaphor-title" style="margin-bottom:12px;">DEFINICIÓN DEL "COLAPSO" (VARIABLE OBJETIVO)</div>
+                            <div style="font-size: 1.8rem; font-weight: 700; margin-bottom: 16px; line-height: 1.2; cursor: pointer; transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'" onclick="openModal('m-umbral-detalle')">
+                                UMBRAL = MEDIANA (12 SEM) + 1,5 × MAD.
+                            </div>
+                            <div style="display:flex; gap:12px; margin-bottom:12px; font-size: 0.95rem;">
+                                <span style="color:#ff7a00; font-size:1.1rem;">●</span> 
+                                <div><strong style="color:#fff;">Estabilidad Matemática.</strong> Se usa la mediana de 12 semanas para evitar que picos aislados distorsionen la línea base del centro.</div>
+                            </div>
+                            <div style="display:flex; gap:12px; margin-bottom:12px; font-size: 0.95rem;">
+                                <span style="color:#ff7a00; font-size:1.1rem;">●</span> 
+                                <div><strong style="color:#fff;">Margen Personalizado.</strong> El MAD (desviación absoluta) ajusta el umbral según la variabilidad histórica de cada centro específico.</div>
+                            </div>
+                        </div>
+
+                        <!-- Columna Derecha: Motor de Predicción -->
+                        <div class="stagger delay-3">
+                            <div class="metaphor-title" style="margin-bottom:12px;">EL MOTOR DE PREDICCIÓN</div>
+                            
+                            <!-- Gráfico de 4 cuadrantes -->
+                            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 16px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 0; width: 55%;">
+                                    <div style="background: rgba(255,255,255,0.03); padding: 12px; border-right: 2px solid rgba(255,122,0,0.6); border-bottom: 2px solid rgba(255,122,0,0.6); display: flex; align-items: center; justify-content: flex-end; text-align: right;">
+                                        <span style="font-weight: 600; font-size: 0.75rem; line-height: 1.2; color:#cbd5e1;">HISTORIAL DEL<br>CENTRO (INERCIA)</span>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.03); padding: 12px; border-bottom: 2px solid rgba(255,122,0,0.6); display: flex; align-items: center;">
+                                        <span style="font-weight: 600; font-size: 0.75rem; line-height: 1.2; color:#cbd5e1;">PRESIÓN DE<br>CENTROS VECINOS</span>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.03); padding: 12px; border-right: 2px solid rgba(255,122,0,0.6); display: flex; align-items: center; justify-content: flex-end; text-align: right;">
+                                        <span style="font-weight: 600; font-size: 0.75rem; line-height: 1.2; color:#cbd5e1;">ESTACIONALIDAD</span>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.03); padding: 12px; display: flex; align-items: center;">
+                                        <span style="font-weight: 600; font-size: 0.75rem; line-height: 1.2; color:#cbd5e1;">COMPLEJIDAD<br>ESTRUCTURAL</span>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; cursor: pointer; transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="openModal('m-mod-variables')">
+                                    <div style="font-size: 2rem; font-weight: 700; color: #ff7a00; line-height: 1.1;">26 <span style="font-size: 1.2rem; color: #FFF; display: block;">VARIABLES<br>PREDICTORAS<br>ANALIZADAS</span></div>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; gap:12px; margin-bottom:12px; font-size: 0.9rem;">
+                                <span style="color:#ff7a00; font-size:1.1rem;">●</span> 
+                                <div><strong style="color:#fff;">XGBoost como Ganador.</strong> Tras comparar algoritmos, XGBoost superó a Regresión Logística y Random Forest con PR-AUC de 0,86.</div>
+                            </div>
+
+                            <!-- Tabla comparativa -->
+                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85rem; cursor: pointer; transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="openModal('m-comparativa-modelos')">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                        <th style="text-align:left; padding:6px 6px; color:var(--text-muted);">ALGORITMO</th>
+                                        <th style="text-align:left; padding:6px 6px; color:var(--text-muted);">CALIDAD (PR-AUC)</th>
+                                        <th style="text-align:left; padding:6px 6px; color:var(--text-muted);">VEREDICTO</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                        <td style="padding:6px 6px;">Regresión Logística</td>
+                                        <td style="padding:6px 6px;">0,77</td>
+                                        <td style="padding:6px 6px;">Demasiadas falsas alarmas</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                        <td style="padding:6px 6px;">Random Forest</td>
+                                        <td style="padding:6px 6px;">0,85</td>
+                                        <td style="padding:6px 6px;">Rendimiento competitivo</td>
+                                    </tr>
+                                    <tr style="border: 1px solid rgba(255,122,0,0.3); background: rgba(255,122,0,0.05); border-radius: 4px;">
+                                        <td style="padding:6px 6px; color:#ff7a00; font-weight:bold;">XGBoost</td>
+                                        <td style="padding:6px 6px; color:#ff7a00; font-weight:bold;">0,86</td>
+                                        <td style="padding:6px 6px; color:#ff7a00; font-weight:bold;">Elegido por precisión</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px; color:#ff7a00; line-height: 1.1; cursor: pointer; transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'" onclick="openModal('m-recall-detalle')">
+                                83% <span style="font-size: 1.4rem; color:#FFF;">DE SENSIBILIDAD (RECALL)</span>
+                            </div>
+                            <div style="display:flex; gap:12px; font-size: 0.9rem;">
+                                <span style="color:#ff7a00; font-size:1.1rem;">●</span> 
+                                <div>El modelo se calibra para priorizar la detección de emergencias reales, aceptando falsas alarmas para no perder ningún colapso.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-mod-colapso')"><span class="chip-emoji">🎚️</span><span class="chip-txt"><span class="chip-label">¿Por qué 12 semanas?</span><span class="chip-sub">y no 4 u 8</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-mod-algoritmos')"><span class="chip-emoji">🌳</span><span class="chip-txt"><span class="chip-label">Los 3 algoritmos</span><span class="chip-sub">cómo funciona cada uno</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-mod-variables')"><span class="chip-emoji">🧬</span><span class="chip-txt"><span class="chip-label">Las 26 variables</span><span class="chip-sub">qué mira el modelo</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-mod-desbalance')"><span class="chip-emoji">⚖️</span><span class="chip-txt"><span class="chip-label">Desbalance de clases</span><span class="chip-sub">no perder emergencias</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-umbral-ejemplo')"><span class="chip-emoji">📐</span><span class="chip-txt"><span class="chip-label">Ejemplo de umbral</span><span class="chip-sub">cálculo paso a paso</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 5 · RESULTADOS ===================== -->
+        <div class="slide" id="slide-5">
+            <div class="slide-header stagger delay-1" style="margin-bottom: 0;">
+                <div class="num">5</div>
+                <h2 style="font-size: 1.8rem; line-height: 1.2;">Resultados: Radar de Alerta Temprana para Urgencias Respiratorias</h2>
+                <div class="accent-line"></div>
+            </div>
+            <p class="stagger delay-1" style="color: #cbd5e1; font-size: 1.05rem; font-weight: 300; margin: 0 0 10px 0; line-height: 1.4; padding-left: 65px; max-width: 95%;">Modelo XGBoost anticipa saturación hospitalaria con 1 semana de antelación, procesando 2 millones de atenciones en 49 centros para una gestión preventiva.</p>
+
+            <div class="content" style="padding-top: 0;">
+                <div class="slide-body" style="display: flex; flex-direction: column; gap: 5px;">
+                    
+                    <!-- Fila 1: Desempeño y Comparativa -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        
+                        <!-- Izquierda: Desempeño -->
+                        <div>
+                            <h3 style="font-size: 0.9rem; color: #fff; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; text-transform: uppercase;">Desempeño y fiabilidad</h3>
+                            <div style="display: flex; gap: 15px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px;">
+                                        <div style="font-size: 1.5rem; color: #4ade80; line-height: 1;">✔</div>
+                                        <div style="font-size: 1.1rem; font-weight: 700; color: #4ade80; line-height: 1.1;">83% detección<br><span style="color: #fff; font-size: 0.9rem;">de colapsos.</span></div>
+                                    </div>
+                                    <p style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.2;">765 sobrecargas identificadas de 922.</p>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px;">
+                                        <div style="font-size: 1.5rem; color: #4ade80; line-height: 1;">🎯</div>
+                                        <div style="font-size: 1.1rem; font-weight: 700; color: #4ade80; line-height: 1.1;">67% precisión<br><span style="color: #fff; font-size: 0.9rem;">preventiva.</span></div>
+                                    </div>
+                                    <p style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.2;">Prioriza no perder ninguna alerta real.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Derecha: Comparativa PR-AUC -->
+                        <div>
+                            <h3 style="font-size: 0.9rem; color: #fff; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; text-transform: uppercase;">Calidad (PR-AUC)</h3>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(74,222,128,0.2); border: 1px solid #4ade80; padding: 2px 8px; margin-bottom: 4px; border-radius: 4px; cursor: pointer;" onclick="openModal('m-comparativa-modelos')">
+                                        <span style="font-size: 0.8rem; font-weight: bold; color: #4ade80;">XGBoost</span>
+                                        <span style="font-size: 0.8rem; font-weight: bold; color: #fff;">0.86</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; border: 1px solid #3b82f6; padding: 2px 8px; margin-bottom: 4px; border-radius: 4px; width: 95%;">
+                                        <span style="font-size: 0.8rem; color: #93c5fd;">RF</span>
+                                        <span style="font-size: 0.8rem; color: #93c5fd;">0.85</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; border: 1px solid #3b82f6; padding: 2px 8px; border-radius: 4px; width: 85%;">
+                                        <span style="font-size: 0.8rem; color: #93c5fd;">LogReg</span>
+                                        <span style="font-size: 0.8rem; color: #93c5fd;">0.77</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Fila 2: Distribución -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.2); margin-bottom: 8px; padding-bottom: 4px;">
+                            <h3 style="font-size: 0.9rem; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin: 0;">Aciertos vs Errores</h3>
+                        </div>
+                        <div style="display:flex; width:100%; height: 20px; border-radius: 4px; overflow:hidden; margin-bottom: 5px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);" onclick="openModal('m-dist-semanal')">
+                            <div style="width: 58.7%; background: #28A745; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:bold; overflow:hidden; white-space:nowrap;">765 Aciertos (58.7%)</div>
+                            <div style="width: 29.2%; background: #FF7A00; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:bold; overflow:hidden; white-space:nowrap;">380 Falsas (29.2%)</div>
+                            <div style="width: 12.1%; background: #DC3545; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:bold; overflow:hidden; white-space:nowrap;">157 Fallos (12.1%)</div>
+                        </div>
+                    </div>
+
+                    <!-- Fila 3: Factores -->
+                    <div>
+                        <h3 style="font-size: 0.9rem; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; text-align: center; margin-bottom: 8px;">Factores Dominantes</h3>
+                        <div style="display: flex; gap: 15px; justify-content: center;">
+                            <div class="factor-card" onclick="openModal('m-fac-inercia')" style="display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; flex: 1;">
+                                <span style="background: #4ade80; color: #064e3b; padding: 2px 6px; border-radius: 4px; font-weight: bold; white-space: nowrap;">Inercia (SHAP 1,81)</span>
+                                <span style="color: #e2e8f0; text-align: center;">Desvío local reciente del centro.</span>
+                                <span class="factor-hint">🔍 toca para ampliar</span>
+                            </div>
+                            <div class="factor-card" onclick="openModal('m-fac-red')" style="display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; flex: 1;">
+                                <span style="border: 1px solid #3b82f6; color: #93c5fd; padding: 2px 6px; border-radius: 4px; font-weight: bold; white-space: nowrap;">Red (Vecinos)</span>
+                                <span style="color: #e2e8f0; text-align: center;">Efecto dominó territorial.</span>
+                                <span class="factor-hint">🔍 toca para ampliar</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="icon-row stagger delay-3" style="flex-wrap: wrap; justify-content: center; margin-top: 10px;">
+                    <div class="icon-chip" onclick="openModal('m-res-matriz')"><span class="chip-emoji">📊</span><span class="chip-txt"><span class="chip-label">Matriz de resultados</span><span class="chip-sub">acierto / falla / escape</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-res-metricas')"><span class="chip-emoji">📈</span><span class="chip-txt"><span class="chip-label">Las métricas</span><span class="chip-sub">qué mide cada una</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-res-12modelos')"><span class="chip-emoji">🤖</span><span class="chip-txt"><span class="chip-label">12 Modelos</span><span class="chip-sub">entrenados y probados</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-res-shap')"><span class="chip-emoji">🔎</span><span class="chip-txt"><span class="chip-label">Top Variables</span><span class="chip-sub">importancia predictiva</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-res-falsas')"><span class="chip-emoji">💡</span><span class="chip-txt"><span class="chip-label">Falsas alarmas</span><span class="chip-sub">un costo aceptado</span></span></div>
+                    <div class="icon-chip" style="border-color: #3b82f6; background: rgba(59,130,246,0.1);" onclick="window.open('./app_dashboard/static/index.html', '_blank')"><span class="chip-emoji">🌐</span><span class="chip-txt"><span class="chip-label" style="color: #60a5fa;">Ir al Dashboard</span><span class="chip-sub">simulador interactivo</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 6 · DATOS INTERESANTES Y HALLAZGOS ===================== -->
+        <div class="slide" id="slide-6">
+            <div class="slide-header stagger delay-1">
+                <div class="num">6</div>
+                <h2>Datos interesantes y hallazgos</h2>
+                <div class="accent-line"></div>
+            </div>
+            <div class="content">
+                <div class="slide-body">
+                    <div class="grid-2">
+                        <div class="stagger delay-2 glass-card card-orange">
+                            <h3 class="highlight-orange">🍂 Los peaks llegaron en otoño</h3>
+                            <p>Las sobrecargas más severas se <strong>adelantaron</strong> a la temporada invernal oficial (semanas 11–20). Guiarse por un calendario fijo de “temporada alta” habría sido un error.</p>
+                        </div>
+                        <div class="stagger delay-2 glass-card card-blue">
+                            <h3 class="highlight-blue">🔗 Los centros no son islas</h3>
+                            <p>La sobrecarga de los vecinos <strong>sube tu propio riesgo</strong> la semana siguiente (efecto dominó). Esto justifica vigilar la red completa, no cada centro por separado.</p>
+                        </div>
+                        <div class="stagger delay-3 glass-card card-green">
+                            <h3 class="highlight">📅 El calendario le gana a los virus</h3>
+                            <p>La estacionalidad de calendario resultó <strong>más útil</strong> que la positividad viral semanal como señal de “cuándo” sube el riesgo.</p>
+                        </div>
+                        <div class="stagger delay-3 glass-card card-pink">
+                            <h3 class="highlight-pink">🌦️ El clima no aporta</h3>
+                            <p>Confirmado por ablación: temperatura, lluvia y MP2.5 <strong>no mejoran nada</strong> una vez que se conoce el ritmo del centro, sus vecinos y la época.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-hal-shap')"><span class="chip-emoji">🔎</span><span class="chip-txt"><span class="chip-label">SHAP</span><span class="chip-sub">qué pesa en la decisión</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-hal-domino')"><span class="chip-emoji">🔗</span><span class="chip-txt"><span class="chip-label">Efecto dominó</span><span class="chip-sub">cómo lo medimos</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-hal-ablacion')"><span class="chip-emoji">🌦️</span><span class="chip-txt"><span class="chip-label">Ablación ambiental</span><span class="chip-sub">con y sin clima</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-hal-frontera')"><span class="chip-emoji">🚧</span><span class="chip-txt"><span class="chip-label">Frontera de predicción</span><span class="chip-sub">el techo honesto</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== 7 · CONCLUSIONES ===================== -->
+        <div class="slide" id="slide-7">
+            <div class="slide-header stagger delay-1">
+                <div class="num">7</div>
+                <h2>Conclusiones</h2>
+                <div class="accent-line"></div>
+            </div>
+            <div class="content">
+                <div class="slide-body">
+                    <div class="grid-3">
+                        <div class="stagger delay-2 glass-card card-blue"><h3 class="highlight-blue">🎯 Objetivo cumplido</h3><p>Detectamos el <strong>83%</strong> de las sobrecargas con una semana de anticipación, validado <strong>sin fuga de datos</strong> y generalizando a centros nuevos (GroupKFold 0,88).</p></div>
+                        <div class="stagger delay-3 glass-card card-green"><h3 class="highlight">🧩 La pregunta importó</h3><p>El mayor salto de desempeño vino de <strong>redefinir “colapso”</strong> contra una base estable —no de cambiar de algoritmo.</p></div>
+                        <div class="stagger delay-4 glass-card card-orange"><h3 class="highlight-orange">🌐 Mirar el vecindario</h3><p>La señal más fuerte es el despegue propio del centro, pero la <strong>presión de la red</strong> vecina aporta información valiosa.</p></div>
+                    </div>
+                </div>
+                <div class="icon-hint stagger delay-3"><span class="pulse"></span> Haz clic para el cierre y lo que viene</div>
+                <div class="icon-row stagger delay-3">
+                    <div class="icon-chip" onclick="openModal('m-con-rigor')"><span class="chip-emoji">✅</span><span class="chip-txt"><span class="chip-label">Rigor y honestidad</span><span class="chip-sub">qué garantizamos</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-con-futuro')"><span class="chip-emoji">🔮</span><span class="chip-txt"><span class="chip-label">Trabajo futuro</span><span class="chip-sub">próximos pasos</span></span></div>
+                    <div class="icon-chip" onclick="openModal('m-con-arquitectura')"><span class="chip-emoji">🖥️</span><span class="chip-txt"><span class="chip-label">Del análisis al panel</span><span class="chip-sub">cómo está construido</span></span></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Controles -->
+    <div class="controls">
+        <button class="btn-nav" id="btn-prev" disabled>&#8592;</button>
+        <div class="progress-dots" id="nav-dots"></div>
+        <button class="btn-nav" id="btn-next">&#8594;</button>
+    </div>
+
+    <!-- ===================== OVERS / MODALES ===================== -->
+
+    <!-- Contexto -->
+    <div class="modal-overlay" id="m-ctx-viral"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-ctx-viral')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🦠</span><h3>La ola viral estacional</h3></div>
+        <p>Cada invierno, un conjunto de enfermedades respiratorias empuja la demanda de urgencias hacia arriba: <strong>bronquitis, neumonías, crisis obstructivas, influenza y VRS</strong> (virus respiratorio sincicial).</p>
+        <p>El volumen total es previsible y se planifica. Lo difícil no es el “cuánto” global, sino el <strong>“dónde y cuándo”</strong> exacto de cada punto de saturación.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-ctx-distrib"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-ctx-distrib')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🗺️</span><h3>La distribución despareja</h3></div>
+        <p>Durante el invierno no todos los centros se llenan al mismo tiempo ni de la misma forma. El volumen entre comunas es <strong>muy desigual</strong>:</p>
+        <table class="mtab">
+            <tr><th>Comuna</th><th>Atenciones (2023–2026)</th></tr>
+            <tr><td>Puente Alto</td><td class="win">474.145</td></tr>
+            <tr><td>La Florida</td><td>298.330</td></tr>
+            <tr><td>Cerro Navia</td><td>179.753</td></tr>
+            <tr><td>Pudahuel</td><td>179.463</td></tr>
+            <tr><td>El Bosque</td><td>162.603</td></tr>
+        </table>
+        <p class="highlight">Pero el volumen total no basta: mientras un centro está colapsado, otro cercano puede tener capacidad disponible — y esto cambia <strong>semana a semana</strong> (vimos alzas de hasta <strong>+306%</strong> de una semana a la otra en un mismo centro).</p>
+        <p>Hoy la red no tiene una herramienta que anticipe <em>qué</em> centro se va a saturar y <em>cuándo</em>, lo que impide mover recursos de forma dinámica.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-ctx-reaccion"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-ctx-reaccion')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">⏱️</span><h3>Cómo se gestiona hoy: reacción tardía</h3></div>
+        <p>Los gestores de la red (los Servicios de Salud: SSMO, SSMC, etc.) hoy <strong>reaccionan después</strong> de que un centro colapsa.</p>
+        <p>Lo que falta es un <strong class="highlight-blue">radar que anticipe</strong> —con una semana de antelación— qué centros específicos están por saturarse, para poder reforzar, derivar y movilizar recursos a tiempo.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-ctx-mapa"><div class="modal-content modal-wide">
+        <button class="modal-close" onclick="closeModal('m-ctx-mapa')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🗺️</span><h3>Los 49 centros en la Región Metropolitana</h3></div>
+        <p style="margin-bottom:14px;">Cada punto es un centro de urgencia, ubicado en su coordenada real y coloreado por <strong>comuna</strong>. Pasa el cursor o haz clic en un punto para ver el nombre del centro.</p>
+        <div id="map-rm"></div>
+    </div></div>
+
+    <div class="modal-overlay" id="m-ctx-listado"><div class="modal-content modal-wide">
+        <button class="modal-close" onclick="closeModal('m-ctx-listado')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📋</span><h3>Listado de los 49 centros</h3></div>
+        <p style="margin-bottom:16px;">Agrupados por comuna (49 establecimientos en 11 comunas de la RM).</p>
+        <div class="listado-centros" id="listado-centros"></div>
+    </div></div>
+
+    <!-- Objetivo -->
+    <div class="modal-overlay" id="m-obj-radar"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-obj-radar')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🎯</span><h3>La meta concreta</h3></div>
+        <p>Predecir, para <strong>cada uno de los 49 centros</strong> y con <strong>una semana de anticipación</strong>, si la próxima semana estará en <strong>sobrecarga (Sí / No)</strong>.</p>
+        <p>Es una alerta <strong>micro-localizada</strong>: no dice “habrá mucha demanda en la Región”, sino “<em>este centro en particular</em> se va a saturar la próxima semana”. Eso es lo que permite mover recursos con precisión.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-obj-ml"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-obj-ml')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🤖</span><h3>¿Por qué Machine Learning y no una regla simple?</h3></div>
+        <p>Una regla fija (“si llegan más de X pacientes, alerta”) <strong>no funciona</strong>: X pacientes puede ser un día normal en un hospital grande y una catástrofe en un SAPU pequeño.</p>
+        <p>Además, el riesgo depende de muchos factores que <strong>interactúan</strong>: la inercia del propio centro, la ola viral, lo que pasa en los centros vecinos y la época del año.</p>
+        <p class="highlight-blue">El Machine Learning permite que el modelo <strong>aprenda solo</strong> esos patrones a partir de años de datos históricos, en vez de escribirlos a mano.</p>
+    </div></div>
+
+    <!-- Datos -->
+    <div class="modal-overlay" id="m-dat-leakage"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-dat-leakage')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔒</span><h3>La regla de oro: no mirar el futuro</h3></div>
+        <p>Para que el modelo sea honesto, nunca puede usar información que no tendría en el momento real de predecir. Dos reglas:</p>
+        <ul class="list-premium">
+            <li><strong>Partición temporal estricta:</strong> entrena solo con <strong>2023–2024</strong> y se prueba solo con <strong>2025–2026</strong>. Medimos su capacidad de predecir años que nunca vio.</li>
+            <li><strong>Variables rezagadas:</strong> para predecir la semana <em>t</em>, solo usa datos hasta <em>t‑1</em>. Así se evita la <strong class="highlight-pink">fuga de datos</strong> (<em>data leakage</em>): si el modelo “espiara” el futuro, brillaría en la prueba y fracasaría en la realidad.</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-dat-filas"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-dat-filas')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📊</span><h3>¿9.000 filas pero 2 millones de pacientes?</h3></div>
+        <p>Cada fila de la base representa <strong>una semana completa de un centro</strong> (no un paciente individual). Con 49 centros × ~4 años × 52 semanas se llega a ~9.000 filas.</p>
+        <p>Dentro de cada fila está el <strong>conteo</strong> de atenciones de esa semana; al sumarlos todos, se llega a ~<strong>2 millones de atenciones reales</strong> (1.995.363, para ser exactos).</p>
+        <p>En promedio, cada semana un centro atiende <strong class="highlight">~221</strong> urgencias respiratorias, y la red completa suma <strong>más de medio millón al año</strong> (≈586 mil en años completos).</p>
+        <p style="font-size:1rem; color:var(--text-muted);">Nota: la Dirección Meteorológica no tiene estaciones en cada comuna, por lo que se usó Quinta Normal como referencia climática de toda la RM — la mejor aproximación con datos públicos.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-dat-fuentes"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-dat-fuentes')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🗂️</span><h3>Ficha de las 4 fuentes</h3></div>
+        <table class="mtab">
+            <tr><th>Fuente</th><th>Qué aporta</th><th>Nivel</th></tr>
+            <tr><td><strong>DEIS / SADU</strong></td><td>Atenciones respiratorias y hospitalizaciones</td><td>Centro (49)</td></tr>
+            <tr><td><strong>FluNet / GISRS</strong></td><td>Positividad de Influenza y VRS</td><td>País</td></tr>
+            <tr><td><strong>SINCA</strong></td><td>Material particulado fino MP2.5</td><td>Comuna (11)</td></tr>
+            <tr><td><strong>DMC</strong></td><td>Temperatura mínima y precipitaciones</td><td>Región</td></tr>
+        </table>
+        <p style="font-size:1rem;">DEIS/SADU es el <strong class="highlight-blue">núcleo</strong>: de ahí sale lo que se predice. Las demás se probaron como enriquecimiento (ver el hallazgo de ablación ambiental).</p>
+    </div></div>
+
+    <!-- Modales Nuevos: Detalle Variables por Fuente -->
+    <div class="modal-overlay" id="m-fuente-asis"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-fuente-asis')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🏥</span><h3>Datos Asistenciales (DEIS / SADU)</h3></div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 0.85rem; border-left: 3px solid var(--brand-blue);">
+            <strong>Nivel:</strong> Centro (49 establecimientos RM) <br>
+            <strong>Período:</strong> Semanal (2023–2026) <br>
+            <strong>Volumen:</strong> ~3.560.000 filas en dataset original (agrupadas luego a ~9.000 semanas). <br>
+            <strong style="color:#ff7a00;">Limpieza:</strong> Se omitieron ~25.710 filas históricas del MINSAL que venían con metadata nula (sin código de establecimiento ni comuna asignada) para evitar fugas y duplicidad.
+        </div>
+
+        <p style="margin-bottom:12px;">El núcleo histórico de comportamiento de cada centro. Monitoreamos <strong>la carga local</strong>:</p>
+        <ul style="list-style: none; padding: 0; display:flex; flex-direction:column; gap:8px;">
+            <li><strong style="color:var(--brand-blue)">n_atenciones:</strong> Total de atenciones respiratorias semanales.</li>
+            <li><strong style="color:var(--brand-blue)">n_0a4 / n_5a14 / n_65mas:</strong> Desglose por grupos etarios de mayor riesgo.</li>
+            <li><strong style="color:var(--brand-blue)">n_hosp_resp:</strong> Cantidad de hospitalizaciones derivadas por causas respiratorias.</li>
+            <li><strong style="color:var(--brand-blue)">TipoUrgencia / NivelComplejidad:</strong> Categorización técnica del recinto de salud.</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-fuente-epi"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-fuente-epi')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🦠</span><h3>Datos Epidemiológicos (FluNet OMS)</h3></div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 0.85rem; border-left: 3px solid var(--brand-green);">
+            <strong>Nivel:</strong> País (Territorio Nacional) <br>
+            <strong>Período:</strong> Semanal (2023–2026) <br>
+            <strong>Volumen:</strong> Serie histórica semanal ininterrumpida de testeo viral en Chile. <br>
+            <strong style="color:#ff7a00;">Limpieza:</strong> Cálculo manual de denominadores (pos_vrs = casos / tests totales) resolviendo quiebres de formato internacional de la OMS para los reportes de 2023.
+        </div>
+
+        <p style="margin-bottom:12px;">Variables que actúan como "termómetro comunitario" del avance de las epidemias de invierno:</p>
+        <ul style="list-style: none; padding: 0; display:flex; flex-direction:column; gap:8px;">
+            <li><strong style="color:var(--brand-green)">pos_vrs:</strong> Porcentaje de positividad del Virus Sincicial Respiratorio (afecta fuertemente pediatría).</li>
+            <li><strong style="color:var(--brand-green)">pos_flu:</strong> Porcentaje de positividad de Influenza A y B en la población nacional.</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-fuente-amb"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-fuente-amb')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🌫️</span><h3>Datos Ambientales (SINCA / DMC)</h3></div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 0.85rem; border-left: 3px solid var(--brand-orange);">
+            <strong>Nivel:</strong> Comuna (11 estaciones de calidad de aire) y Región (Meteorología en Quinta Normal). <br>
+            <strong>Período:</strong> Registros diarios agrupados a nivel Semanal (2023–2026) <br>
+            <strong style="color:#ff7a00;">Limpieza:</strong> Se aplicaron interpolaciones y arrastre de valores para cubrir "huecos" diarios (sensores apagados) antes de generar el promedio semanal.
+        </div>
+
+        <p style="margin-bottom:12px;">Agravantes externos comprobados en la incidencia de crisis respiratorias severas:</p>
+        <ul style="list-style: none; padding: 0; display:flex; flex-direction:column; gap:8px;">
+            <li><strong style="color:var(--brand-orange)">mp25_prom / mp25_max:</strong> Concentración de Material Particulado 2.5 (promedio y peak semanal).</li>
+            <li><strong style="color:var(--brand-orange)">temp_min_prom:</strong> Temperatura mínima promedio registrada en la semana.</li>
+            <li><strong style="color:var(--brand-orange)">n_dias_preemergencia:</strong> Cantidad de días bajo decreto de preemergencia ambiental.</li>
+            <li><strong style="color:var(--brand-orange)">precip_acum / n_dias_helada:</strong> Volumen de lluvias y días bajo cero, factores de enfriamiento poblacional.</li>
+        </ul>
+    </div></div>
+
+    <!-- Modales Nuevos de Umbral -->
+    <div class="modal-overlay" id="m-umbral-detalle"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-umbral-detalle')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🧮</span><h3>Detalle de la Fórmula del Umbral</h3></div>
+        <p>El "Umbral de Colapso" es el límite de atenciones a partir del cual consideramos que un centro está en emergencia.</p>
+        <ul class="list-premium">
+            <li><strong>Mediana (12 SEM):</strong> Es el punto medio de atenciones de las últimas 12 semanas. Representa la "normalidad reciente" del centro, filtrando valores extremos que un promedio sí tomaría en cuenta y se vería distorsionado.</li>
+            <li><strong>MAD (Desviación Absoluta Mediana):</strong> Es una medida de qué tanto varían las atenciones normalmente semana a semana. Es más robusta ante peaks atípicos que la Desviación Estándar tradicional.</li>
+            <li><strong>Multiplicador (1,5):</strong> Se otorga un margen de tolerancia del 1,5 sobre la variabilidad normal. Cualquier semana que supere esta banda es matemáticamente un "pico atípico".</li>
+        </ul>
+        <p class="highlight-orange">Esta fórmula permite tener un umbral dinámico que se auto-ajusta a cada SAPU/SAR de acuerdo a su propia realidad y escala poblacional, sin usar un número fijo irreal.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-umbral-ejemplo"><div class="modal-content" style="max-width: 820px; max-height: 94vh; padding: 25px 35px;">
+        <button class="modal-close" onclick="closeModal('m-umbral-ejemplo')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📐</span><h3>Ejemplo de cálculo de Umbral</h3></div>
+        
+        <div style="background: rgba(10,20,35,0.9); border: 1px solid rgba(0,158,247,0.3); border-radius: 12px; padding: 14px 20px; margin-bottom: 14px;">
+            <div style="font-size: 1.05rem; font-weight: 700; color: #FFF; margin-bottom: 4px;"><span class="m-emoji" style="margin-right: 6px;">📐</span> 109824 - SAPU Presidente Salvador Allende Gossens</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">Cómo se definió su umbral esa semana.</div>
+            
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">Lo normal de este centro (últimas 12 semanas)</span>
+                <strong style="color: #FFF;">78.0 pac.</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">Margen de tolerancia</span>
+                <strong style="color: #FFF;">+26.3 pac. (+34%)</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">Umbral de colapso de ESE centro</span>
+                <strong style="color: #FFF;">104.3 pac.</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">Volumen real esa semana</span>
+                <strong style="color: #FFF;">267.0 pac.</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">Probabilidad de colapso (modelo)</span>
+                <strong style="color: #FFF;">100%</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0; font-size: 0.9rem;">
+                <span style="color: #cbd5e1;">¿Alertó el modelo?</span>
+                <strong style="color: #FFF;">Sí</strong>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.85rem; color: #FFF; display: flex; align-items: center; gap: 8px;">
+                <span style="display:inline-block; width:10px; height:10px; background:var(--brand-green); border-radius:50%; box-shadow: 0 0 8px var(--brand-green);"></span>
+                Acierto — el modelo alertó y el colapso fue real.
+            </div>
+        </div>
+        
+        <div style="background: rgba(10,20,35,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 20px; margin-bottom: 14px;">
+            <div style="font-size: 0.95rem; font-weight: 700; color: #FFF; margin-bottom: 10px;"><span class="m-emoji">📈</span> Variación de 109824 - SAPU Presidente Salvador Allende Gossens (últimas 12 semanas)</div>
+            
+            <div style="height: 100px; display: flex; align-items: flex-end; justify-content: space-between; position: relative; padding-top: 10px; margin-bottom: 6px;">
+                <!-- Línea de mediana superior -->
+                <div style="position: absolute; left: 0; right: 0; bottom: 29.2%; border-top: 2px dashed #ff7a00; z-index: 10;"></div>
+                <div style="position: absolute; left: 0; bottom: calc(29.2% + 3px); color: #FFF; font-size: 0.8rem; font-weight: bold; z-index: 10; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">mediana 78</div>
+
+                <!-- Línea de umbral (límite superior) -->
+                <div style="position: absolute; left: 0; right: 0; bottom: 39.0%; border-top: 2px dashed #ff3b30; z-index: 9;"></div>
+                <div style="position: absolute; right: 0; bottom: calc(39.0% + 3px); color: #FFF; font-size: 0.8rem; font-weight: bold; z-index: 10; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">umbral 104</div>
+
+                <!-- Barras 1-12 (Azules) -->
+                <div style="width: 6%; height: 53.9%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="144 pac."></div>
+                <div style="width: 6%; height: 19.1%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="51 pac."></div>
+                <div style="width: 6%; height: 35.5%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="95 pac."></div>
+                <div style="width: 6%; height: 32.2%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="86 pac."></div>
+                <div style="width: 6%; height: 23.5%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="63 pac."></div>
+                <div style="width: 6%; height: 20.2%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="54 pac."></div>
+                <div style="width: 6%; height: 26.2%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="70 pac."></div>
+                <div style="width: 6%; height: 26.2%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="70 pac."></div>
+                <div style="width: 6%; height: 22.4%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="60 pac."></div>
+                <div style="width: 6%; height: 33.3%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="89 pac."></div>
+                <div style="width: 6%; height: 44.5%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="119 pac."></div>
+                <div style="width: 6%; height: 66.2%; background: #3b748a; border-radius: 4px 4px 0 0; z-index: 2;" title="177 pac."></div>
+
+                <!-- Barra actual (Naranja) -->
+                <div style="width: 7.5%; height: 100%; background: #ff7a00; border-radius: 4px 4px 0 0; z-index: 2; box-shadow: 0 0 10px rgba(255,122,0,0.4);" title="Semana Actual: 267 pac."></div>
+            </div>
+            
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-align: left;">semanas anteriores → esta semana</div>
+        </div>
+        
+        <div>
+            <strong style="color:var(--brand-blue); display:block; margin-bottom:8px; font-size:1rem;"><span class="m-emoji">🧮</span> ¿Cómo llegamos a este umbral?</strong>
+            <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem;">
+                <li>Tomamos sus últimas 12 semanas: <span style="color: var(--text-muted);">[144, 51, 95, 86, 63, 54, 70, 70, 60, 89, 119, 177]</span> pacientes.</li>
+                <li>La mediana de esos valores = <strong>78.0 pac.</strong> → esto es "lo normal" de este centro.</li>
+                <li>Margen de tolerancia (1.5 × MAD) = <strong>+26.3 pac.</strong> (+34%) → Umbral = 78.0 + 26.3 = <strong>104.3 pac.</strong></li>
+                <li>Esta semana el centro tuvo <strong>267.0 pac.</strong> reales → <span style="color:var(--brand-orange); font-weight:bold;">SUPERA</span> su umbral.</li>
+                <li>El modelo estimó <strong>100%</strong> de probabilidad de colapso (aproximación, no una predicción directa del modelo).</li>
+            </ol>
+        </div>
+    </div></div>
+
+    <!-- Explicación Recall -->
+    <div class="modal-overlay" id="m-recall-detalle"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-recall-detalle')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🎯</span><h3>¿Qué significa el 83% de Sensibilidad (Recall)?</h3></div>
+        <p>La <strong>Sensibilidad</strong> mide la capacidad del modelo para "no dejar escapar" los colapsos reales.</p>
+        <ul class="list-premium">
+            <li><strong>En términos simples:</strong> De todos los colapsos que <em>realmente ocurrieron</em> en la realidad histórica, el modelo logró predecir y alertar exitosamente el <strong>83%</strong> de ellos con una semana de anticipación.</li>
+            <li><strong>¿Qué pasa con el 17% restante?</strong> Son los llamados "falsos negativos" (colapsos súbitos o imprevisibles) que el modelo no vio venir, y que son parte del margen de error inevitable de sistemas predictivos.</li>
+        </ul>
+        <p class="highlight-orange">En el contexto de salud pública, se diseñó el modelo para priorizar una alta sensibilidad. Es preferible que el sistema mande una falsa alarma que se pueda descartar, a que guarde silencio y un SAPU colapse sin previo aviso.</p>
+    </div></div>
+
+    <!-- Comparativa Modal -->
+    <div class="modal-overlay" id="m-comparativa-modelos">
+        <div class="modal-content" style="max-width: 1150px; max-height: 96vh; padding: 30px; background-color: #f8f9fa; color: #1e293b; border: 1px solid #e2e8f0; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+            <button class="modal-close" style="color: #64748b; background: transparent;" onmouseover="this.style.color='#0f172a'" onmouseout="this.style.color='#64748b'" onclick="closeModal('m-comparativa-modelos')">&times;</button>
+            
+            <h2 style="font-size: 2.2rem; margin-bottom: 8px; color: #0f172a; border: none; padding: 0;">Comparativa de Algoritmos:<br><span style="color: #0f172a;">Predicción de Sobrecarga en Urgencias</span></h2>
+            <p style="color: #475569; font-size: 0.95rem; margin-bottom: 20px; max-width: 90%; line-height: 1.4;">Para anticipar el colapso de las urgencias respiratorias con una semana de antelación, el equipo evaluó tres arquitecturas de Machine Learning bajo las mismas condiciones. El objetivo fue elegir el modelo con mayor capacidad predictiva (PR-AUC) sin basarse en suposiciones, sino en evidencia empírica.</p>
+    
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 30px;">
+                <!-- Izquierda -->
+                <div>
+                    <h3 style="font-size: 1.3rem; margin-bottom: 16px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; color: #0f172a;">Los 3 Algoritmos Evaluados</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <!-- Card 1 -->
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                            <div style="font-size: 2rem; margin-bottom: 8px;">📉</div>
+                            <h4 style="font-size: 1.1rem; margin-bottom: 6px; color: #0f172a; line-height: 1.2;">Regresión Logística <span style="font-size: 0.8rem; font-weight: normal; color:#64748b; display:block;">(con Lasso)</span></h4>
+                            <p style="font-size: 0.85rem; color: #475569; line-height: 1.4;">El más simple; usa una fórmula lineal transparente donde Lasso descarta variables irrelevantes.</p>
+                        </div>
+                        <!-- Card 2 -->
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                            <div style="font-size: 2rem; margin-bottom: 8px;">🌲</div>
+                            <h4 style="font-size: 1.1rem; margin-bottom: 6px; color: #0f172a; line-height: 1.2;">Random Forest <span style="font-size: 0.8rem; font-weight: normal; color:#64748b; display:block;">(Bosque Aleatorio)</span></h4>
+                            <p style="font-size: 0.85rem; color: #475569; line-height: 1.4;">Cientos de árboles de decisión que votan para capturar interacciones complejas no lineales.</p>
+                        </div>
+                        <!-- Card 3 (XGBoost) -->
+                        <div style="background: #ffffff; border: 3px solid #166534; padding: 15px; border-radius: 8px; position: relative; box-shadow: 0 10px 15px -3px rgba(22,101,52,0.1);">
+                            <div style="position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: #166534; color: #fff; font-weight: bold; font-size: 0.75rem; padding: 4px 12px; border-radius: 12px; white-space: nowrap;">EL MODELO ELEGIDO</div>
+                            <div style="font-size: 2rem; margin-bottom: 8px; margin-top: 5px;">🎯</div>
+                            <h4 style="font-size: 1.1rem; margin-bottom: 6px; color: #166534; line-height: 1.2;">XGBoost</h4>
+                            <p style="font-size: 0.85rem; color: #334155; line-height: 1.4;">Árboles secuenciales que corrigen errores previos; es el más preciso para datos tabulares.</p>
+                        </div>
+                    </div>
+    
+                    <h3 style="font-size: 1.3rem; margin-bottom: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; color: #0f172a;">Calidad General de los Modelos (PR-AUC)</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e2e8f0; background: #f1f5f9;">
+                                <th style="text-align:left; padding:8px; color:#334155; font-weight: 600;">Algoritmo</th>
+                                <th style="text-align:left; padding:8px; color:#334155; font-weight: 600;">Calidad (PR-AUC)</th>
+                                <th style="text-align:left; padding:8px; color:#334155; font-weight: 600;">Veredicto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding:8px;">Regresión Logística</td>
+                                <td style="padding:8px;">0.77</td>
+                                <td style="padding:8px;">Descartado por simplicidad lineal</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding:8px;">Random Forest</td>
+                                <td style="padding:8px;">0.85</td>
+                                <td style="padding:8px;">Muy competitivo</td>
+                            </tr>
+                            <tr style="background: #166534; color: #fff;">
+                                <td style="padding:8px; font-weight: bold;">XGBoost</td>
+                                <td style="padding:8px; font-weight: bold;">0.86</td>
+                                <td style="padding:8px; font-weight: bold;">Ganador por precisión superior</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+    
+                <!-- Derecha -->
+                <div style="border-left: 1px solid #cbd5e1; padding-left: 30px;">
+                    <h3 style="font-size: 1.3rem; margin-bottom: 16px; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; color: #0f172a;">Resultados y Desempeño</h3>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="font-size: 1.05rem; margin-bottom: 6px; color: #0f172a;">Transparencia vs. Precisión</h4>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #475569; margin-bottom: 4px; font-weight: 600;">
+                            <span>Transparencia</span>
+                            <span>Precisión</span>
+                        </div>
+                        <div style="width: 100%; height: 28px; display: flex; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="width: 45%; background: #94a3b8; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#fff;">Regresión Logística</div>
+                            <div style="width: 55%; background: #166534; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#fff; font-weight:bold;">XGBoost</div>
+                        </div>
+                        <p style="font-size: 0.85rem; color: #475569; line-height: 1.4;">Mientras la regresión es totalmente legible, XGBoost ofrece la mayor exactitud en la predicción.</p>
+                    </div>
+    
+                    <div style="margin-bottom: 20px; display: flex; gap: 16px; align-items: center; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <!-- Donut representation -->
+                        <div style="flex-shrink: 0; width: 70px; height: 70px; border-radius: 50%; border: 9px solid #166534; border-left-color: #94a3b8; border-bottom-color: #94a3b8; transform: rotate(-45deg); position: relative; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                            <span style="transform: rotate(45deg); font-size: 1.3rem; font-weight: 900; color: #0f172a;">83%</span>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 1.05rem; margin-bottom: 4px; color: #0f172a;">83% de Sensibilidad (Recall)</h4>
+                            <p style="font-size: 0.85rem; color: #475569; line-height: 1.4;">El modelo final detecta 8 de cada 10 colapsos reales con una semana de anticipación.</p>
+                        </div>
+                    </div>
+    
+                    <div>
+                        <h4 style="font-size: 1.05rem; margin-bottom: 8px; color: #0f172a;">Interpretación con SHAP</h4>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <div style="font-size: 2.2rem; flex-shrink:0;">🕸️</div>
+                            <p style="font-size: 0.85rem; color: #475569; line-height: 1.4;">Se utiliza la técnica SHAP para explicar qué variables influyeron en las decisiones del modelo de caja negra.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modelo -->
+    <div class="modal-overlay" id="m-mod-colapso"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-mod-colapso')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🎚️</span><h3>¿Por qué una ventana de 12 semanas?</h3></div>
+        <p>El “valor típico” de cada centro se calcula con la mediana de sus últimas semanas. Probamos tres tamaños de ventana:</p>
+        <table class="mtab">
+            <tr><th>Ventana</th><th>Ruido de la base</th><th>PR-AUC</th></tr>
+            <tr><td>4 semanas</td><td>19,2 (muy inestable)</td><td>0,76</td></tr>
+            <tr><td>8 semanas</td><td>16,4</td><td>0,77</td></tr>
+            <tr><td class="win">12 semanas</td><td class="win">14,0 (la más estable)</td><td class="win">0,86</td></tr>
+        </table>
+        <p>Una ventana corta reacciona rápido pero es ruidosa: marca como colapso fluctuaciones normales. <strong>12 semanas</strong> fue el mejor equilibrio entre estabilidad y capacidad de detección.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-mod-algoritmos"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-mod-algoritmos')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🌳</span><h3>Los 3 algoritmos comparados</h3></div>
+        <ul class="list-premium">
+            <li><strong>Regresión Logística (con Lasso):</strong> el más simple. Aprende una fórmula lineal ponderada; el Lasso apaga las variables inútiles. Totalmente transparente.</li>
+            <li><strong>Random Forest:</strong> cientos de árboles de decisión que “votan”. Captura interacciones sin indicárselas, pero es menos interpretable.</li>
+            <li><strong class="highlight">XGBoost (el elegido):</strong> árboles construidos <strong>en secuencia</strong>, cada uno corrigiendo los errores del anterior. El más preciso en datos tabulares; se acompaña con SHAP para explicarlo.</li>
+        </ul>
+        <p>Se probaron los tres con <strong>exactamente las mismas variables y datos</strong>, para elegir con evidencia y no a priori.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-mod-variables"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-mod-variables')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🧬</span><h3>Las 26 variables, en 4 familias</h3></div>
+        <ul class="list-premium">
+            <li><strong class="highlight-blue">A · Inercia del propio centro:</strong> atenciones recientes, “calor reciente” (cuánto se despegó de su base), momentum, aceleración, hospitalizaciones.</li>
+            <li><strong class="highlight-blue">B · Presión de la red:</strong> qué tan cargados venían los centros vecinos de la misma comuna y Servicio de Salud (calculado <em>dejando fuera</em> al propio centro).</li>
+            <li><strong class="highlight-blue">C · Época del año:</strong> seno y coseno de la semana, que ubican al modelo en el ciclo anual (el año es cíclico: la semana 52 y la 1 están “juntas”).</li>
+            <li><strong class="highlight-blue">D · Estructura del centro:</strong> tipo de urgencia (SAPU, SAR, UEH…) y nivel de complejidad.</li>
+        </ul>
+        <p style="font-size:1rem; color:var(--text-muted);">Quedaron <strong>fuera</strong>: positividad viral (la época del año ya captura el “cuándo”) y clima/contaminación (no aportaron — ver ablación).</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-mod-desbalance"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-mod-desbalance')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">⚖️</span><h3>El desbalance de clases</h3></div>
+        <p>Los colapsos son minoritarios: solo el <strong>24%</strong> de las semanas-centro son sobrecarga. Un modelo tramposo que dijera siempre “todo normal” acertaría un 76%… y sería inútil, porque nunca avisaría una emergencia.</p>
+        <p>Por eso <strong>no usamos “Accuracy”</strong> y aplicamos dos soluciones:</p>
+        <ul class="list-premium">
+            <li>Ponderar la clase minoritaria (equivocarse en un colapso “cuesta” más).</li>
+            <li>Elegir el punto de operación en el <strong class="highlight">recall objetivo de 83%</strong>: una decisión de negocio para <strong>no perder colapsos</strong>.</li>
+        </ul>
+    </div></div>
+
+    <!-- Resultados -->
+    <div class="modal-overlay" id="m-res-matriz"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-res-matriz')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📊</span><h3>Matriz de resultados (2025–2026)</h3></div>
+        <p>Sobre los datos de prueba —años que el modelo nunca vio— hubo <strong>922 colapsos reales</strong>:</p>
+        <ul class="list-premium">
+            <li><strong class="highlight">Aciertos (765):</strong> colapsos detectados con anticipación → recall 83%.</li>
+            <li><strong class="highlight-orange">Falsas alarmas (380):</strong> el modelo alertó, pero el centro no colapsó.</li>
+            <li><strong class="highlight-pink">No detectados (157):</strong> el centro colapsó sin aviso → solo el 17% se escapó.</li>
+        </ul>
+        <p>Precisión = 765 / (765 + 380) = <strong>67%</strong>.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-res-12modelos"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-res-12modelos')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🤖</span><h3>12 Modelos Entrenados y Evaluados</h3></div>
+        <p>Se realizó un extenso barrido explorando combinaciones de algoritmos y configuraciones de hiperparámetros (GridSearch). Evaluamos familias enteras de modelos antes de llegar a la decisión final:</p>
+        <ul class="list-premium">
+            <li><strong class="highlight">Modelos Lineales:</strong> Regresión Logística, Lasso, Ridge (funcionan bien como baseline pero pierden interacciones no lineales como Clima vs Inercia).</li>
+            <li><strong class="highlight-orange">Basados en Árboles (Bagging):</strong> Random Forest (altamente robustos, pero el tamaño del modelo y tiempo de inferencia eran subóptimos para un dashboard).</li>
+            <li><strong class="highlight-blue">Gradient Boosting:</strong> LightGBM, GradientBoosting, y XGBoost (lograron capturar efectos complejos del vecindario y mantuvieron el mejor balance PR-AUC).</li>
+        </ul>
+        <p>El campeón fue <strong>XGBoost</strong>: no solo por la métrica (PR-AUC 0.86), sino porque permite una integración fluida y tiempos de respuesta de milisegundos en el dashboard.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-res-shap"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-res-shap')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔎</span><h3>Importancia de Variables (SHAP)</h3></div>
+        <p>Al abrir la "caja negra" del modelo con SHAP Values, descubrimos qué miraba realmente XGBoost para tomar decisiones:</p>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin-top: -10px; margin-bottom: 15px;"><em>* Los valores SHAP (SHapley Additive exPlanations) son un método basado en teoría de juegos que mide el impacto exacto de cada variable a favor o en contra de la alerta, haciendo que la predicción sea transparente y explicable.</em></p>
+        <ul class="list-premium">
+            <li><strong class="highlight">1. Inercia del propio Centro:</strong> El factor más decisivo. Si un SAPU o SAR venía desviándose de su normalidad en los últimos 3-7 días, la alerta se dispara.</li>
+            <li><strong class="highlight-blue">2. Presión de la Red:</strong> La carga sobre los centros vecinos (el "efecto dominó"). Un centro saturado empuja demanda a los más cercanos.</li>
+            <li><strong class="highlight-orange">3. Época del Año:</strong> La estacionalidad temporal dictó las reglas por encima de la estacionalidad viral (el calendario le gana a los virus).</li>
+            <li><strong class="highlight-pink">X. Clima y Polución:</strong> Aportaron información casi nula o redundante, por lo que fueron descartados en iteraciones posteriores.</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-res-metricas"><div class="modal-content" style="max-width: 850px;">
+        <button class="modal-close" onclick="closeModal('m-res-metricas')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📈</span><h3>Las métricas, explicadas en detalle</h3></div>
+        
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <table class="mtab" style="width: 100%;">
+                <tr><th>Métrica</th><th>Qué responde</th><th>Valor</th></tr>
+                <tr><td>Recall (Sensibilidad)</td><td>De los colapsos reales, ¿cuántos detectamos?</td><td class="win">83%<br><span style="font-size:0.75rem;font-weight:normal">(765 de 922)</span></td></tr>
+                <tr><td>Precisión</td><td>De las alertas, ¿cuántas eran reales?</td><td>67%<br><span style="font-size:0.75rem;font-weight:normal">(765 de 1145)</span></td></tr>
+                <tr><td>F1 Score</td><td>Equilibrio matemático entre ambos</td><td>0,74</td></tr>
+                <tr><td>PR-AUC</td><td>Calidad general (azar = 0,24)</td><td class="win">0,86</td></tr>
+            </table>
+            
+            <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <p style="margin-top: 0; font-size: 0.95rem; line-height: 1.5; color: #e2e8f0;"><strong>¿Por qué usamos PR-AUC y no ROC-AUC?</strong><br>
+                En urgencias los colapsos son eventos raros (hay muchos más días normales). La curva <strong>ROC-AUC</strong> incluye los Verdaderos Negativos, lo que infla artificialmente el puntaje y lo hace ver <em>sobreoptimista</em>. La curva <strong>Precisión-Recall (PR-AUC)</strong> es <strong>mucho más honesta</strong> para este tipo de cribado, porque ignora los días normales que son fáciles de predecir y evalúa exclusivamente qué tan bien captamos las emergencias.</p>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <img src="entregas/roc_vs_pr.png" alt="Curva ROC vs PR-AUC" style="width: 100%; max-width: 600px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+                    <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 10px;">Evidencia: La curva ROC aparenta un desempeño casi perfecto ocultando las falsas alarmas, mientras que PR-AUC refleja el desafío real.</p>
+                </div>
+            </div>
+        </div>
+    </div></div>
+
+    <div class="modal-overlay" id="m-res-comparativa"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-res-comparativa')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🆚</span><h3>Comparación final de los 3 modelos</h3></div>
+        <p>Evaluados con las mismas variables y los mismos datos de prueba:</p>
+        <table class="mtab">
+            <tr><th>Modelo</th><th>PR-AUC</th></tr>
+            <tr><td>Regresión Logística (Lasso)</td><td>0,77</td></tr>
+            <tr><td>Random Forest</td><td>0,85</td></tr>
+            <tr><td class="win">XGBoost (elegido)</td><td class="win">0,86</td></tr>
+        </table>
+        <img class="slide-img" src="entregas/grafico_comparativa.png" style="width:100%; margin-top:8px;">
+        <p style="font-size:1rem;">Los tres están muy por encima del azar (0,24): el problema es genuinamente predecible. XGBoost ganó por margen estrecho y por integrarse al panel interactivo.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-res-falsas"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-res-falsas')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">💡</span><h3>Falsas alarmas: un costo aceptado a propósito</h3></div>
+        <p>Al priorizar <strong>no perder emergencias reales</strong>, el sistema prefiere avisar de más. Recall y precisión son como un balancín: bajar el corte detecta más colapsos pero con más falsas alarmas.</p>
+        <p class="highlight-blue">En salud, un turno de refuerzo activado “de más” cuesta mucho menos que una urgencia colapsada sin aviso.</p>
+        <p style="font-size:1rem; color:var(--text-muted);">El panel añade un “semáforo de confianza” (🔴 Alerta firme / 🟡 Vigilar) y un control de severidad para filtrar los colapsos marginales.</p>
+    </div></div>
+
+    <!-- Factores Dominantes -->
+    <div class="modal-overlay" id="m-fac-inercia"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-fac-inercia')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">📈</span><h3>Inercia: el propio ritmo del centro</h3></div>
+        <p>Es el factor que <strong>más pesa</strong> en cada alerta. Mide una sola cosa: cuánto se está <strong>despegando un centro de su propio ritmo normal</strong> en los últimos 3 a 7 días.</p>
+        <ul class="list-premium">
+            <li><strong class="highlight">Es como un termómetro propio:</strong> no compara al SAPU con otros centros, sino <strong>consigo mismo</strong>. Si un centro que suele atender ~100 personas al día salta a 140, esa aceleración enciende la alerta.</li>
+            <li><strong class="highlight-blue">¿Qué significa “SHAP 1,81”?</strong> SHAP es la forma de medir cuánto empuja cada variable la decisión final. 1,81 es su peso: <strong>más del triple</strong> que el siguiente factor. En simple, es la palanca que más inclina la balanza hacia “encender la alerta”.</li>
+            <li><strong class="highlight-orange">Por qué tiene sentido:</strong> un colapso casi nunca aparece de la nada; suele venir precedido de varios días de “calentamiento” del propio centro. El modelo aprende a leer ese despegue temprano.</li>
+        </ul>
+        <p style="font-size:0.9rem; color:var(--text-muted);">En resumen: el mejor aviso de que un centro va a colapsar es <strong>el propio centro empezando a acelerar</strong>.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-fac-red"><div class="modal-content" style="max-width: 720px;">
+        <button class="modal-close" onclick="closeModal('m-fac-red')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔗</span><h3>La red de vecinos: el efecto dominó</h3></div>
+        <p>Los centros de salud <strong>no son islas</strong>. Cuando los centros vecinos de una misma comuna o servicio de salud se saturan, la demanda que no alcanzan a atender <strong>se desplaza al centro de al lado</strong>. La sobrecarga de un barrio “contagia” a los centros cercanos la semana siguiente.</p>
+
+        <div style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:12px 10px 6px; margin: 10px 0 4px;">
+            <svg viewBox="0 0 580 250" style="width:100%; height:auto; display:block;" role="img" aria-label="Un centro saturado empuja demanda a sus centros vecinos, cuyo riesgo sube la semana siguiente">
+                <defs>
+                    <radialGradient id="fac-red-c" cx="50%" cy="38%" r="70%">
+                        <stop offset="0%" stop-color="#fb7185"/>
+                        <stop offset="100%" stop-color="#dc2626"/>
+                    </radialGradient>
+                    <radialGradient id="fac-red-n" cx="50%" cy="38%" r="70%">
+                        <stop offset="0%" stop-color="#fcd34d"/>
+                        <stop offset="100%" stop-color="#f59e0b"/>
+                    </radialGradient>
+                    <marker id="fac-red-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" fill="#fca5a5"/>
+                    </marker>
+                </defs>
+                <g stroke="#fca5a5" stroke-width="2.5" fill="none" marker-end="url(#fac-red-arrow)" opacity="0.9">
+                    <line x1="246.8" y1="109.3" x2="141.7" y2="71.3"/>
+                    <line x1="333.2" y1="109.3" x2="438.3" y2="71.3"/>
+                    <line x1="246.8" y1="140.7" x2="141.7" y2="178.7"/>
+                    <line x1="333.2" y1="140.7" x2="438.3" y2="178.7"/>
+                </g>
+                <g font-family="Outfit, sans-serif" text-anchor="middle">
+                    <circle cx="105" cy="58" r="33" fill="url(#fac-red-n)"/>
+                    <text x="105" y="55" font-size="12" font-weight="700" fill="#3b2a00">Vecino</text>
+                    <text x="105" y="70" font-size="10" font-weight="700" fill="#7a3b00">riesgo ↑</text>
+                    <circle cx="475" cy="58" r="33" fill="url(#fac-red-n)"/>
+                    <text x="475" y="55" font-size="12" font-weight="700" fill="#3b2a00">Vecino</text>
+                    <text x="475" y="70" font-size="10" font-weight="700" fill="#7a3b00">riesgo ↑</text>
+                    <circle cx="105" cy="192" r="33" fill="url(#fac-red-n)"/>
+                    <text x="105" y="189" font-size="12" font-weight="700" fill="#3b2a00">Vecino</text>
+                    <text x="105" y="204" font-size="10" font-weight="700" fill="#7a3b00">riesgo ↑</text>
+                    <circle cx="475" cy="192" r="33" fill="url(#fac-red-n)"/>
+                    <text x="475" y="189" font-size="12" font-weight="700" fill="#3b2a00">Vecino</text>
+                    <text x="475" y="204" font-size="10" font-weight="700" fill="#7a3b00">riesgo ↑</text>
+                    <circle cx="290" cy="125" r="46" fill="url(#fac-red-c)"/>
+                    <text x="290" y="120" font-size="14" font-weight="800" fill="#fff">Centro</text>
+                    <text x="290" y="138" font-size="14" font-weight="800" fill="#fff">saturado</text>
+                </g>
+            </svg>
+            <p style="font-size:0.78rem; color:#94a3b8; text-align:center; margin:6px 0 2px;">Un centro saturado empuja demanda a sus vecinos → su riesgo sube la semana siguiente, como fichas de dominó.</p>
+        </div>
+
+        <ul class="list-premium">
+            <li><strong class="highlight">Cómo lo medimos (sin trampa):</strong> para cada centro promediamos lo que pasa en los <strong>otros</strong> centros de su zona, <em>sin incluirlo a él mismo</em> (técnica <em>leave-one-out</em>). Así la señal viene de verdad del vecindario y no del propio centro.</li>
+            <li><strong class="highlight-blue">Cuánto ayudó:</strong> sumar esta “presión de red” fue una de las mejoras más grandes del proyecto: la calidad del modelo subió de <strong>0,52 a 0,61 (PR-AUC)</strong>.</li>
+        </ul>
+        <p style="font-size:0.9rem; color:var(--text-muted);">Por eso el sistema vigila la <strong>red completa</strong>, no cada centro por separado.</p>
+    </div></div>
+
+    <!-- Hallazgos -->
+    <div class="modal-overlay" id="m-hal-shap"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-hal-shap')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔎</span><h3>SHAP: qué mira el modelo para decidir</h3></div>
+        <p>SHAP “abre la caja negra”: mide cuánto empuja cada variable hacia predecir colapso. Ranking del modelo final (las dos últimas filas vienen de versiones previas, no del modelo que se despliega):</p>
+        <table class="mtab">
+            <tr><th>#</th><th>Variable</th><th>Peso</th></tr>
+            <tr><td>1</td><td class="win">Calor reciente del propio centro</td><td class="win">1,81</td></tr>
+            <tr><td>2</td><td>Época del año (coseno y seno)</td><td>0,56 y 0,51</td></tr>
+            <tr><td>3</td><td>Presión de red del Servicio de Salud <em>(solo en modelos previos)</em></td><td>0,45</td></tr>
+            <tr><td>4</td><td>Presión de red de la comuna <em>(solo en modelos previos)</em></td><td>0,41</td></tr>
+            <tr><td>5+</td><td>Otras (z-score 8 sem, momentum…)</td><td>&lt; 0,32</td></tr>
+        </table>
+        <p>El predictor más fuerte es <strong>el propio despegue del centro</strong> sobre lo que ha sido normal para él, y la época del año aporta la señal secundaria. La <strong>presión de la red vecina</strong> pesaba en versiones anteriores, pero al perfeccionar la señal de calor reciente quedó <strong>absorbida por ella</strong>: dejó de aportar precisión y <strong>no entra en el modelo final</strong>.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-hal-domino"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-hal-domino')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔗</span><h3>El efecto dominó territorial</h3></div>
+        <p>Descubrimos empíricamente que los centros <strong>no son islas</strong>: si tu vecindario se satura, tu riesgo sube la semana siguiente.</p>
+        <p>Se mide con la técnica <em>leave-one-out</em>: para un centro se promedia lo que pasa en los <strong>otros</strong> de su comuna/servicio, sin incluirse a sí mismo (si no, sería trampa).</p>
+        <p class="highlight-blue">Agregar la “presión de red” fue una de las palancas más grandes del proyecto (PR-AUC 0,52 → 0,61).</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-hal-ablacion"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-hal-ablacion')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🌦️</span><h3>Ablación ambiental: ¿aporta el clima?</h3></div>
+        <p>La <strong>ablación</strong> corre el modelo <strong>con</strong> y <strong>sin</strong> una variable para medir su valor. Con las variables ambientales:</p>
+        <table class="mtab">
+            <tr><th>Modelo</th><th>Resultado</th></tr>
+            <tr><td>Base (sin ambiente)</td><td>referencia</td></tr>
+            <tr><td>+ MP2.5</td><td>prácticamente igual</td></tr>
+            <tr><td>+ MP2.5 + clima</td><td>prácticamente igual</td></tr>
+            <tr><td>+ clima</td><td>prácticamente igual</td></tr>
+        </table>
+        <p>La diferencia cae <strong>dentro del ruido</strong>: no aporta nada significativo. Es un hallazgo, no un fracaso — una vez conocido el ritmo del centro, sus vecinos y la época, el clima externo no agrega información útil.</p>
+    </div></div>
+
+    <div class="modal-overlay" id="m-hal-frontera"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-hal-frontera')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🚧</span><h3>La frontera de predictibilidad (honestidad científica)</h3></div>
+        <p>Investigamos por qué la precisión no sube más allá de cierto punto sin bajar el recall. Probamos <strong>seis caminos distintos</strong> y todos chocaron con el mismo techo.</p>
+        <p class="highlight-blue">La conclusión honesta: ese techo no es una limitación de nuestro método, sino de la información disponible.</p>
+        <p>El colapso de un centro tiene un componente genuinamente aleatorio (qué día se enferma la gente) que ninguna variable externa puede predecir. Reconocer y medir esa frontera es parte del rigor del trabajo.</p>
+    </div></div>
+
+    <!-- Conclusiones -->
+    <div class="modal-overlay" id="m-con-rigor"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-con-rigor')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">✅</span><h3>Rigor y honestidad: qué garantizamos</h3></div>
+        <ul class="list-premium">
+            <li>Detecta el <strong>83%</strong> de las sobrecargas con <strong>una semana</strong> de anticipación.</li>
+            <li>Validado <strong>sin fuga de datos</strong> (partición temporal + variables rezagadas).</li>
+            <li><strong>Generaliza a centros nuevos</strong>: GroupKFold 0,88, estable en 5 pruebas. No es un truco memorizado de centros específicos.</li>
+            <li>Sus <strong>límites están medidos y explicados</strong> (frontera de predictibilidad).</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-con-futuro"><div class="modal-content">
+        <button class="modal-close" onclick="closeModal('m-con-futuro')">&times;</button>
+        <div class="modal-head"><span class="m-emoji">🔮</span><h3>Trabajo futuro</h3></div>
+        <ul class="list-premium">
+            <li><strong>Reducir falsas alarmas</strong> sin perder detección, explorando datos intrahospitalarios (dotación, camas, tiempos de espera) que la matemática externa no puede aportar.</li>
+            <li><strong>Complementar la alerta con una estimación de volumen</strong> (cuántos pacientes), para dimensionar recursos y no solo avisar.</li>
+            <li><strong>Formalizar el punto de operación</strong> (el recall objetivo) junto al equipo gestor de la red.</li>
+            <li><strong>Re-evaluar la definición estacional</strong> cuando se acumulen más años de historia.</li>
+        </ul>
+    </div></div>
+
+    <div class="modal-overlay" id="m-con-arquitectura"><div class="modal-content" style="text-align:center;">
+        <button class="modal-close" onclick="closeModal('m-con-arquitectura')">&times;</button>
+        <div class="modal-head" style="justify-content:center;"><span class="m-emoji">🖥️</span><h3>Del análisis al panel interactivo</h3></div>
+        <p style="text-align:left;">El sistema funciona de punta a punta en dos componentes que comparten el mismo modelo:</p>
+        <ul class="list-premium" style="text-align:left;">
+            <li><strong>El análisis</strong> (notebooks): construye la base semana-por-centro, prepara las 26 variables, entrena y compara los modelos y corre todas las pruebas (curva PR, validación por centro, SHAP, ablación).</li>
+            <li><strong>El panel interactivo</strong> (dashboard web): muestra el modelo en vivo, permite mover la sensibilidad, cambiar la definición de colapso y explorar centro por centro.</li>
+        </ul>
+        <img class="slide-img" src="entregas/ml_patterns_concept.png" style="width:100%; max-width:620px; margin-top:10px;">
+    </div></div>
+
+    <!-- Distribución Semanal Modal -->
+    <div class="modal-overlay" id="m-dist-semanal"><div class="modal-content" style="max-width: 1000px;">
+        <button class="modal-close" onclick="closeModal('m-dist-semanal')">&times;</button>
+        <div class="modal-head">
+            <span class="m-emoji">📊</span><h3>Distribución Semanal de Resultados</h3>
+        </div>
+        <div style="display: flex; gap: 15px; font-size: 0.9rem; font-weight: bold; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 5px; color: #ef4444;">
+                <span style="font-size: 1.2rem;">⚠️</span> Colapsos No Detectados
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px; color: #166534;">
+                <span style="font-size: 1.2rem;">✔</span> Total Aciertos
+            </div>
+        </div>
+        <img src="entregas/grafico_resumen_barra.png" style="width: 100%; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" alt="Distribución Semanal">
+    </div></div>
+
+    <script>
+        let ws;
+        let isSyncing = false;
+
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                isSyncing = true;
+
+                if (data.current_slide !== undefined || data.type === 'slide_changed') {
+                    const newSlide = data.current_slide !== undefined ? data.current_slide : data.slide;
+                    if (window.currentSlide !== newSlide) {
+                        window.goToSlide(newSlide, false);
+                    }
+                }
+
+                if (data.type === 'modal_opened') {
+                    openModal(data.id, false);
+                } else if (data.type === 'modal_closed') {
+                    closeModal(data.id, false);
+                } else if (data.active_modal !== undefined) {
+                    if (data.active_modal) {
+                        openModal(data.active_modal, false);
+                    } else {
+                        document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+                    }
+                }
+                setTimeout(() => { isSyncing = false; }, 50);
+            };
+            ws.onclose = function() { setTimeout(connectWebSocket, 1000); };
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+
+            const slides = document.querySelectorAll('.slide');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const dotsContainer = document.getElementById('nav-dots');
+            const counter = document.getElementById('slide-counter');
+
+            window.currentSlide = 0;
+            const totalSlides = slides.length;
+
+            slides.forEach((_, idx) => {
+                const dot = document.createElement('div');
+                dot.classList.add('dot');
+                if (idx === 0) dot.classList.add('active');
+                dot.addEventListener('click', () => window.goToSlide(idx));
+                dotsContainer.appendChild(dot);
+            });
+
+            const pad = (n) => String(n).padStart(2, '0');
+
+            const updateUI = () => {
+                slides.forEach((slide, idx) => {
+                    slide.classList.remove('active', 'prev-slide');
+                    if (idx === window.currentSlide) {
+                        slide.classList.add('active');
+                    } else if (idx < window.currentSlide) {
+                        slide.classList.add('prev-slide');
+                    }
+                });
+                btnPrev.disabled = window.currentSlide === 0;
+                btnNext.disabled = window.currentSlide === totalSlides - 1;
+                document.querySelectorAll('.dot').forEach((dot, idx) => {
+                    dot.classList.toggle('active', idx === window.currentSlide);
+                });
+                if (counter) counter.textContent = `${pad(window.currentSlide + 1)} / ${pad(totalSlides)}`;
+            };
+
+            window.goToSlide = (idx, broadcast = true) => {
+                if (idx >= 0 && idx < totalSlides) {
+                    window.currentSlide = idx;
+                    updateUI();
+                    if (broadcast && ws && ws.readyState === WebSocket.OPEN && !isSyncing) {
+                        ws.send(JSON.stringify({ type: 'slide_changed', slide: idx }));
+                    }
+                }
+            };
+
+            btnPrev.addEventListener('click', () => window.goToSlide(window.currentSlide - 1));
+            btnNext.addEventListener('click', () => window.goToSlide(window.currentSlide + 1));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                    window.goToSlide(window.currentSlide + 1);
+                } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                    window.goToSlide(window.currentSlide - 1);
+                } else if (e.key === 'Escape') {
+                    document.querySelectorAll('.modal-overlay.active').forEach(m => {
+                        closeModal(m.id);
+                    });
+                }
+            });
+        });
+
+        // Overs (modales) — sincronizados
+        function openModal(id, broadcast = true) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.add('active');
+            if (id === 'm-ctx-mapa' && typeof buildMapa === 'function') buildMapa();
+            if (id === 'm-ctx-listado' && typeof buildListado === 'function') buildListado();
+            if (broadcast && ws && ws.readyState === WebSocket.OPEN && !isSyncing) {
+                ws.send(JSON.stringify({ type: 'modal_opened', id: id }));
+            }
+        }
+        function closeModal(id, broadcast = true) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('active');
+            if (broadcast && ws && ws.readyState === WebSocket.OPEN && !isSyncing) {
+                ws.send(JSON.stringify({ type: 'modal_closed', id: id }));
+            }
+        }
+
+        // Cerrar over al hacer clic en el fondo oscuro
+        document.querySelectorAll('.modal-overlay').forEach(ov => {
+            ov.addEventListener('click', (e) => { if (e.target === ov) closeModal(ov.id); });
+        });
+    </script>
+
+    <script>
+        // Paleta de las 11 comunas (colores distintos)
+        const COMUNA_COLORS = {
+            "Santiago": "#009EF7", "Cerrillos": "#D0F500", "Cerro Navia": "#FF7A00",
+            "El Bosque": "#FF338D", "Independencia": "#7C4DFF", "La Florida": "#00E0B8",
+            "Las Condes": "#FFC400", "Pudahuel": "#4CAF50", "Puente Alto": "#FF5252",
+            "Quilicura": "#40C4FF", "Talagante": "#B388FF"
+        };
+
+        let _mapaRM = null;
+        function buildMapa() {
+            if (_mapaRM) { setTimeout(() => _mapaRM.invalidateSize(), 250); return; }
+            if (typeof L === 'undefined' || !window.CENTROS) return;
+            _mapaRM = L.map('map-rm', { zoomControl: true, scrollWheelZoom: false });
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
+            }).addTo(_mapaRM);
+
+            const markers = [];
+            window.CENTROS.forEach(c => {
+                const color = COMUNA_COLORS[c.comuna] || '#009EF7';
+                const m = L.circleMarker([c.lat, c.lon], {
+                    radius: 6, color: '#fff', weight: 1.2, fillColor: color, fillOpacity: 0.9
+                });
+                m.bindPopup('<b>' + c.nombre + '</b><br>' + c.comuna + ' · ' + c.tipo);
+                m.bindTooltip(c.nombre, { direction: 'top' });
+                m.addTo(_mapaRM);
+                markers.push(m);
+            });
+            _mapaRM.fitBounds(L.featureGroup(markers).getBounds().pad(0.08));
+
+            const legend = L.control({ position: 'bottomright' });
+            legend.onAdd = function () {
+                const d = L.DomUtil.create('div', 'map-legend');
+                d.innerHTML = '<b>Comunas</b>' + Object.keys(COMUNA_COLORS).map(k =>
+                    '<span><i style="background:' + COMUNA_COLORS[k] + '"></i>' + k + '</span>').join('');
+                return d;
+            };
+            legend.addTo(_mapaRM);
+            setTimeout(() => _mapaRM.invalidateSize(), 250);
+        }
+
+        function buildListado() {
+            const el = document.getElementById('listado-centros');
+            if (!el || el.dataset.done || !window.CENTROS) return;
+            const byC = {};
+            window.CENTROS.forEach(c => { (byC[c.comuna] = byC[c.comuna] || []).push(c); });
+            el.innerHTML = Object.keys(byC).sort().map(com =>
+                '<div class="lc-com"><h4>' + com + ' <span>(' + byC[com].length + ' centros | ~' + Math.round(byC[com][0].comuna_avg_semanal) + ' aten/sem)</span></h4><ul>' +
+                byC[com].map(c => '<li>' + c.nombre + ' <em>' + c.tipo + '</em> <span style="color:var(--brand-green); font-size:0.8rem; margin-left:6px;">(~' + Math.round(c.avg_semanal) + ' aten/sem)</span></li>').join('') +
+                '</ul></div>').join('');
+            el.dataset.done = '1';
+        }
+
+        // Genera las celdas decorativas de la lámina de Contexto (mosaico + bloques Hospital/SAPU)
+        document.addEventListener('DOMContentLoaded', () => {
+            const mos = document.getElementById('mosaic');
+            if (mos) for (let i = 0; i < 48; i++) {
+                const c = document.createElement('i');
+                c.style.opacity = (0.15 + ((i * 53) % 100) / 100 * 0.85).toFixed(2);
+                mos.appendChild(c);
+            }
+            const hg = document.getElementById('cells-hospital');
+            if (hg) for (let i = 0; i < 35; i++) {
+                const s = document.createElement('span'); s.className = 'cell'; hg.appendChild(s);
+            }
+            const sp = document.getElementById('cells-sapu');
+            if (sp) for (let i = 0; i < 9; i++) {
+                const s = document.createElement('span'); s.className = 'brick'; sp.appendChild(s);
+            }
+        });
+    </script>
+
+</body>
+</html>

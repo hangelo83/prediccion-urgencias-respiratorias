@@ -1,0 +1,2642 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Resultados — Alerta Temprana de Sobrecarga Localizada</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{--blue:#009EF7;--sky:#1090CD;--dark:#09567B;--light:#ACE4FC;--green:#00A878;--pink:#FF338D;--orange:#FF7A00;--gray:#F5F5F5;
+--ok:#28A745;--warn:#FFC107;--crit:#DC3545;--bg:#F5F5F5;--card:#fff;--tx:#333;--mut:#09567B;--rad:12px;--sh:0 4px 12px rgba(0,0,0,.05);}
+body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--tx);margin:0;min-height:100vh;padding-top:70px;padding-left:250px;}
+header{background:var(--dark);color:#fff;padding:0.5rem 2rem;display:flex;flex-direction:row;justify-content:space-between;align-items:flex-end;gap:1rem;position:fixed;top:0;left:0;right:0;z-index:100;}
+header h1{margin:0;font-size:1.4rem;font-weight:500;} header .sub{font-size:.85rem;color:var(--light);}
+#controles{background:#fff;border-right:1px solid #ccc;padding:1.5rem 1.2rem;position:fixed;top:70px;left:0;bottom:0;width:250px;z-index:99;display:flex;flex-direction:column;align-items:stretch;gap:1.5rem;box-shadow:2px 0 12px rgba(0,0,0,.05);font-size:.85rem;overflow-y:auto;box-sizing:border-box;}
+.filtros-fila{display:flex;flex-direction:column;gap:1.5rem;align-items:stretch;width:100%;}
+.control-group{display:flex;flex-direction:column;gap:.3rem;}
+.control-group label{font-weight:600;color:var(--dark);}
+.control-group select,.control-group input{padding:.3rem;border-radius:4px;border:1px solid #ccc;}
+.container{padding:2rem;max-width:1400px;margin:0 auto;box-sizing:border-box;}
+.disclaimer{background:#e6f7ff;border:1px solid #91d5ff;color:#0050b3;border-radius:var(--rad);padding:.8rem 1.2rem;margin-bottom:1.5rem;font-size:.92rem;}
+.disclaimer strong{color:#003a8c;}
+h2.sec{color:var(--dark);font-size:1.15rem;margin:2rem 0 1rem;border-bottom:2px solid var(--light);padding-bottom:.3rem;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1.2rem;margin-bottom:1rem;}
+.kpi{background:var(--card);padding:1.2rem;border-radius:var(--rad);box-shadow:var(--sh);border-top:4px solid var(--blue);position:relative;}
+.kpi .t{font-size:.82rem;color:var(--mut);margin-bottom:.4rem;} .kpi .v{font-size:2rem;font-weight:700;color:var(--dark);margin:0;}
+.kpi .s{font-size:.78rem;margin-top:.5rem;color:#555;}
+.badge{padding:.15rem .5rem;border-radius:12px;font-size:.72rem;font-weight:700;color:#fff;display:inline-block;}
+.b-crit{background:var(--crit);}.b-warn{background:var(--warn);color:#333;}.b-ok{background:var(--ok);}.b-info{background:var(--blue);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;} .grid21{display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;}
+.card{background:var(--card);padding:1.5rem;border-radius:var(--rad);box-shadow:var(--sh);margin-bottom:1.5rem;}
+.card h3{margin:0 0 .3rem;color:var(--dark);font-size:1.02rem;} .card .hint{font-size:.82rem;color:var(--mut);margin:0 0 1rem;}
+.takeaway{margin-top:.8rem;font-size:.84rem;background:var(--gray);border-left:3px solid var(--blue);padding:.6rem .8rem;border-radius:4px;}
+.takeaway.warn{border-left-color:var(--crit);}
+.cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:.4rem;align-items:stretch;font-size:.85rem;}
+.cm .cell{padding:1rem;border-radius:8px;text-align:center;color:#fff;}
+.cm .lbl{display:flex;align-items:center;justify-content:center;color:var(--mut);font-weight:600;font-size:.8rem;padding:.3rem;}
+.cm .big{font-size:1.6rem;font-weight:700;display:block;}
+.tp{background:#28A745;}.tn{background:#1090CD;}.fp{background:#FF7A00;}.fn{background:#DC3545;}
+table{width:100%;border-collapse:collapse;} th,td{padding:.55rem .6rem;text-align:left;border-bottom:1px solid #eee;font-size:.85rem;}
+th{color:var(--mut);background:var(--gray);font-weight:600;}
+.ins{background:var(--gray);padding:1rem;border-radius:8px;margin-bottom:1rem;font-size:.9rem;}
+.ins.pink{border-left:4px solid var(--pink);} .ins.blue{border-left:4px solid var(--blue);} .ins.green{border-left:4px solid var(--green);}
+#overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.8);z-index:9999;display:flex;justify-content:center;align-items:center;font-size:1.5rem;font-weight:bold;color:var(--dark);display:none;}
+.toggle{display:flex;align-items:center;gap:.3rem;}
+@media(max-width:900px){.grid2,.grid21{grid-template-columns:1fr;} body{padding-top:280px;padding-left:0;} #controles{position:static;width:100%;height:auto;border-right:none;border-bottom:1px solid #ccc;} .filtros-fila{flex-direction:row;flex-wrap:wrap;}}
+</style></head>
+<body>
+<div id="overlay">Recalculando modelo en vivo...</div>
+<header>
+  <!-- Título principal y API info -->
+  <div style="text-align: left; flex: 1;">
+    <h1 id="main-title" style="margin:0;font-size:1.15rem;font-weight:500;">Alerta Temprana de Sobrecarga Localizada (Vivo)</h1>
+    <div class="sub">Resultados reales — Backtesting Train 2023-24 → Test 2025-26</div>
+    <div style="font-size: 0.8rem; color: #4ade80; margin-top: 4px; font-weight: 500; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+      <span>📅 Datos actualizados a: <span id="lbl-ultima-actualizacion">{{ULTIMA_ACTUALIZACION}}</span></span>
+      <button id="btn-actualizar-datos" onclick="actualizarDatos()" style="background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:0.15rem 0.6rem; font-size:0.75rem; cursor:pointer;">🔄 Actualizar datos</button>
+      <span id="lbl-actualizar-status" style="font-size:0.75rem; color:#FFD166;"></span>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.2); flex: 1.5; justify-content: center; padding-bottom: 0.2rem;">
+    <button id="btn-tab-simulador" class="tab-btn" onclick="switchTab('simulador')" style="background:transparent; border:none; color:#fff; font-size:0.95rem; font-weight:bold; padding:0.2rem 1rem; border-bottom:3px solid var(--blue); cursor:pointer;">Simulador en Vivo</button>
+    <button id="btn-tab-comparativa" class="tab-btn" onclick="switchTab('comparativa')" style="background:transparent; border:none; color:var(--light); font-size:0.95rem; font-weight:500; padding:0.2rem 1rem; border-bottom:3px solid transparent; cursor:pointer;">Comparativa de Escenarios</button>
+    <button id="btn-tab-evolucion" class="tab-btn" onclick="switchTab('evolucion')" style="background:transparent; border:none; color:var(--light); font-size:0.95rem; font-weight:500; padding:0.2rem 1rem; border-bottom:3px solid transparent; cursor:pointer;">Evolución de Modelos</button>
+    <button id="btn-tab-configia" class="tab-btn" onclick="switchTab('configia')" style="background:transparent; border:none; color:var(--light); font-size:0.95rem; font-weight:500; padding:0.2rem 1rem; border-bottom:3px solid transparent; cursor:pointer;">Configuración IA</button>
+  </div>
+
+  <div style="text-align: right; flex: 1;">
+     <div class="sub">Modelo Dinámico (API)</div>
+     <div id="lbl-modelo-header" style="font-weight:700;font-size:1.0rem">XGBoost Interactivo</div>
+  </div>
+</header>
+
+<div id="view-simulador">
+<div id="alert-futura-container" style="display:none; padding:1.5rem; max-width:1400px; margin: 0 auto; margin-top: 15px; margin-bottom: 0px; background: rgba(220, 53, 69, 0.1); border: 2px solid var(--crit); border-radius: var(--rad); box-shadow: var(--sh);">
+  <div id="pronostico-futuro-blocks"></div>
+</div>
+<div id="controles">
+  <div class="filtros-fila">
+    <div class="control-group" style="flex:1; max-width: 400px;">
+      <label>Filtro por Centro</label>
+      <select id="ctrl_centro" style="width:100%;">
+        <option value="">-- Todos los centros --</option>
+      </select>
+    </div>
+    <div class="control-group" style="flex:1; max-width: 400px;">
+      <label>Dial Recall: <span id="opR" style="color:var(--green); font-weight:700;">83</span>%</label>
+      <input type="range" id="opSlider" min="30" max="98" value="83" step="1" style="width:100%;margin-top:.4rem;accent-color:#09567B">
+    </div>
+  </div>
+
+  <div class="filtros-fila">
+    <div class="control-group">
+      <label>Años de Entrenamiento</label>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+        <label class="toggle"><input type="checkbox" name="train_year" value="2023" checked> 2023</label>
+        <label class="toggle"><input type="checkbox" name="train_year" value="2024" checked> 2024</label>
+        <label class="toggle"><input type="checkbox" name="train_year" value="2025" checked> 2025</label>
+        <label class="toggle"><input type="checkbox" name="train_year" value="2026"> 2026</label>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Años de Test</label>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+        <label class="toggle"><input type="checkbox" name="test_year" value="2023"> 2023</label>
+        <label class="toggle"><input type="checkbox" name="test_year" value="2024"> 2024</label>
+        <label class="toggle"><input type="checkbox" name="test_year" value="2025"> 2025</label>
+        <label class="toggle"><input type="checkbox" name="test_year" value="2026" checked> 2026</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="filtros-fila">
+    <div class="control-group">
+      <label>Definición del Colapso</label>
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        <select id="ctrl_tipo">
+          <option value="nivel">Mediana/MAD (Robusto)</option>
+          <option value="sobre_tendencia">Media/Std (Clásico)</option>
+          <option value="salto_wow">Salto WoW (Shock)</option>
+          <option value="aumento_estandar">Aumento sobre Estándar (Modelo V2)</option>
+          <option value="aumento_reciente" selected>Aumento sobre Tendencia (Modelo V3)</option>
+          <option value="estacional">Estacional Adaptativo (Modelo V4)</option>
+        </select>
+        <select id="ctrl_ventana">
+          <option value="4">4 semanas</option>
+          <option value="8">8 semanas</option>
+          <option value="12" selected>12 semanas</option>
+        </select>
+        <select id="ctrl_k">
+          <option value="1.0" selected>k = 1.0</option>
+          <option value="1.5">k = 1.5</option>
+          <option value="2.0">k = 2.0</option>
+        </select>
+        <label style="font-weight:600;color:var(--dark);margin-top:.4rem">Severidad mín.: <span id="sevVal" style="color:var(--orange);font-weight:700">0</span>% sobre base</label>
+        <input type="range" id="ctrl_severidad" min="0" max="40" value="0" step="5" style="width:100%;accent-color:#FF7A00">
+        <span style="font-size:.72rem;color:var(--mut)">0% = cualquier colapso · 15-20% = solo sobrecargas grandes. En Modelo V3 esto equivale al % de aumento sobre la media/mediana reciente.</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Ablación de Features (Activas)</label>
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        <label class="toggle"><input type="checkbox" id="ctrl_f_clima"> Clima/MP2.5</label>
+        <label class="toggle"><input type="checkbox" id="ctrl_f_red"> Presión Red</label>
+        <label class="toggle"><input type="checkbox" id="ctrl_f_viral"> Viral</label>
+        <label class="toggle"><input type="checkbox" id="ctrl_f_zrob" checked> Calor Robusto</label>
+      </div>
+    </div>
+    
+    <!-- Mejor / Peor Combinación -->
+    <div class="control-group" style="margin-top: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
+      <label>Configuraciones de Referencia</label>
+      <div style="display: flex; flex-direction: column; gap: 0.8rem; background: var(--gray); padding: 0.8rem; border-radius: 8px; font-size: 0.8rem;">
+        <div id="btn-best" style="cursor: pointer;" onclick="applyGridConfig('best')" title="Techo teórico del grid: su k=1.0 sin ventana media infla la prevalencia de 'colapso' (~51%) y sesga el PR-AUC al alza. NO es el modelo operativo. Clic para explorarlo.">
+          <div style="color: var(--orange); font-weight: bold; margin-bottom: 0.2rem;">▲ Techo teórico del grid (PR-AUC: <span id="best-auc">--</span>) <span style="font-weight:400; color:var(--mut);">· sesgo de prevalencia</span></div>
+          <div id="best-conf" style="color: var(--mut); line-height: 1.3;">Cargando...</div>
+          <div style="color: var(--mut); font-size:0.72rem; line-height:1.3; margin-top:0.25rem; font-style:italic;">No adoptado por defecto (infla la prevalencia a ~51%). El modelo operativo es el default: <b>nivel · 12 · k=1.5</b>.</div>
+        </div>
+        <div id="btn-worst" style="cursor: pointer; border-top: 1px solid #ccc; padding-top: 0.8rem;" onclick="applyGridConfig('worst')" title="Clic para aplicar esta combinación">
+          <div style="color: var(--pink); font-weight: bold; margin-bottom: 0.2rem;">⚠ Peor Combinación (PR-AUC: <span id="worst-auc">--</span>)</div>
+          <div id="worst-conf" style="color: var(--mut); line-height: 1.3;">Cargando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filtros-fila">
+    <div class="control-group" style="flex:1;">
+      <label>Cobertura de datos recientes (reporte DEIS)</label>
+      <div id="cobertura-reciente-list" style="display:flex;flex-direction:column;gap:.5rem;font-size:.78rem;margin-bottom:.4rem;">Cargando...</div>
+      <span style="font-size:.72rem;color:var(--mut);">Desmarca una semana si sospechas rezago de reporte: el modelo la ESTIMA en vez de confiar en su dato, tal como ya hace con la semana en curso.</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+<div class="card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; margin-bottom: 2rem;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1.5rem;">
+    <div style="flex:1; min-width:300px;">
+      <h2 style="color:white; font-size:1.8rem; margin-top:0;">Objetivo del proyecto</h2>
+      <h3 style="color:#38bdf8; font-size:1.5rem; margin-top:0.5rem; line-height:1.2;">Desarrollar un radar predictivo para anticipar sobrecargas.</h3>
+      <p style="color:#cbd5e1; font-size:0.95rem; line-height:1.5;">Mediante <strong>Machine Learning</strong>, el sistema anticipa con <strong style="color:#fde047;">una semana de antelación</strong> qué centros específicos sufrirán un colapso por enfermedades respiratorias, permitiendo una gestión proactiva en lugar de reactiva.</p>
+      
+      <p style="color:#60a5fa; font-weight:bold; font-size:0.8rem; letter-spacing:1px; margin-top:1.5rem; text-transform:uppercase;">LA META CENTRAL: MACHINE LEARNING VS REGLAS FIJAS</p>
+      
+      <button onclick="document.getElementById('modal-umbral').style.display='flex'" style="margin-top:1rem; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3); padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:1.2rem;">📐</span> Ejemplo de cálculo de Umbral
+      </button>
+    </div>
+    
+    <div style="background:rgba(255,255,255,0.05); border-radius:8px; padding:1.5rem; flex:1; min-width:300px;">
+      <h4 style="color:#60a5fa; margin-top:0; font-size:0.85rem; letter-spacing:1px; text-transform:uppercase;">ACCIONES Y CAPACIDADES</h4>
+      <p style="color:#94a3b8; font-size:0.8rem; margin-bottom:1rem;">Gestión Preventiva de Recursos</p>
+      
+      <div style="margin-bottom:1rem;">
+        <div style="display:flex; align-items:center; gap:0.5rem; color:#38bdf8; font-weight:bold; font-size:1.1rem;">
+          <span>👨‍⚕️</span> Reforzar
+        </div>
+        <p style="color:#cbd5e1; font-size:0.85rem; margin-top:0.25rem;">Turnos de médicos y kinesiólogos, solo en los centros en riesgo.</p>
+      </div>
+      
+      <div>
+        <div style="display:flex; align-items:center; gap:0.5rem; color:#a3e635; font-weight:bold; font-size:1.1rem;">
+          <span>🔀</span> Derivar
+        </div>
+        <p style="color:#cbd5e1; font-size:0.85rem; margin-top:0.25rem;">Pacientes hacia centros de la red más descongestionados.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-umbral" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:#0f172a; color:white; width:90%; max-width:800px; border-radius:12px; padding:2rem; position:relative; max-height:90vh; overflow-y:auto; border: 1px solid #334155;">
+    <button onclick="document.getElementById('modal-umbral').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:transparent; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+    <h2 style="color:white; margin-top:0; display:flex; align-items:center; gap:0.5rem;">📐 Ejemplo de cálculo de Umbral</h2>
+    
+    <div style="background:#1e293b; border-radius:8px; padding:1.5rem; margin-top:1.5rem; border:1px solid #334155;">
+      <h4 style="color:white; margin-top:0; font-size:1rem; display:flex; align-items:center; gap:0.5rem;"><span>📐</span> 109824 - SAPU Presidente Salvador Allende Gossens</h4>
+      <p style="color:#94a3b8; font-size:0.8rem; margin-bottom:1rem;">Cómo se definió su umbral esa semana.</p>
+      
+      <table style="width:100%; font-size:0.9rem; color:#cbd5e1; border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:0.5rem 0;">Lo normal de este centro (últimas 12 semanas)</td>
+          <td style="text-align:right; font-weight:bold; color:white;">78.0 pac.</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:0.5rem 0;">Margen de tolerancia</td>
+          <td style="text-align:right; font-weight:bold; color:white;">+26.3 pac. (+34%)</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:0.5rem 0;">Umbral de colapso de ESE centro</td>
+          <td style="text-align:right; font-weight:bold; color:white;">104.3 pac.</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:0.5rem 0;">Volumen real esa semana</td>
+          <td style="text-align:right; font-weight:bold; color:white;">267.0 pac.</td>
+        </tr>
+        <tr style="border-bottom:1px solid #334155;">
+          <td style="padding:0.5rem 0;">Probabilidad de colapso (modelo)</td>
+          <td style="text-align:right; font-weight:bold; color:white;">100%</td>
+        </tr>
+        <tr>
+          <td style="padding:0.5rem 0; color:#a3e635; display:flex; align-items:center; gap:0.5rem;"><span>🟢</span> Acierto — el modelo alertó y el colapso fue real.</td>
+          <td style="text-align:right; font-weight:bold; color:white;">Sí</td>
+        </tr>
+      </table>
+    </div>
+    
+    <div style="background:#1e293b; border-radius:8px; padding:1.5rem; margin-top:1rem; border:1px solid #334155;">
+       <h4 style="color:#60a5fa; font-size:0.9rem; margin-top:0;">📊 Variación de 109824 - SAPU Presidente Salvador Allende Gossens (últimas 12 semanas)</h4>
+       <!-- Chart dummy representation as HTML blocks -->
+       <div style="height:100px; display:flex; align-items:flex-end; gap:4px; margin-top:1.5rem; position:relative; border-bottom:1px solid #475569;">
+          <div style="position:absolute; width:100%; border-top:1px dashed #ef4444; bottom:78%; left:0;"><span style="position:absolute; top:-15px; right:0; color:#ef4444; font-size:10px;">umbral 104</span></div>
+          <div style="position:absolute; width:100%; border-top:1px dashed #38bdf8; bottom:55%; left:0;"><span style="position:absolute; top:-15px; left:0; color:#38bdf8; font-size:10px;">mediana 78</span></div>
+          <!-- bars -->
+          <div style="flex:1; background:#475569; height:80%;"></div>
+          <div style="flex:1; background:#475569; height:40%;"></div>
+          <div style="flex:1; background:#475569; height:60%;"></div>
+          <div style="flex:1; background:#475569; height:50%;"></div>
+          <div style="flex:1; background:#475569; height:45%;"></div>
+          <div style="flex:1; background:#475569; height:35%;"></div>
+          <div style="flex:1; background:#475569; height:50%;"></div>
+          <div style="flex:1; background:#475569; height:50%;"></div>
+          <div style="flex:1; background:#475569; height:40%;"></div>
+          <div style="flex:1; background:#475569; height:65%;"></div>
+          <div style="flex:1; background:#475569; height:85%;"></div>
+          <div style="flex:1.5; background:#f97316; height:100%; border-radius:2px 2px 0 0;"></div>
+       </div>
+       <div style="font-size:0.7rem; color:#94a3b8; text-align:center; margin-top:0.5rem;">semanas anteriores → esta semana</div>
+    </div>
+    
+    <div style="margin-top:1.5rem; font-size:0.85rem; color:#cbd5e1; line-height:1.6;">
+       <h4 style="color:#38bdf8; margin-top:0; font-size:0.9rem;">🧮 ¿Cómo llegamos a este umbral?</h4>
+       <ol style="margin-bottom:0; padding-left:1.5rem;">
+         <li>Tomamos sus últimas 12 semanas: [144, 51, 95, 86, 63, 54, 70, 70, 60, 89, 119, 177] pacientes.</li>
+         <li>La mediana de esos valores = <strong>78.0 pac.</strong> → esto es "lo normal" de este centro.</li>
+         <li>Margen de tolerancia (1.5 × MAD) = <strong>+26.3 pac. (+34%)</strong> → Umbral = 78.0 + 26.3 = <strong>104.3 pac.</strong></li>
+         <li>Esta semana el centro tuvo <strong>267.0 pac.</strong> reales → <span style="color:#f97316; font-weight:bold;">SUPERA</span> su umbral.</li>
+         <li>El modelo estimó <strong>100%</strong> de probabilidad de colapso (aproximación, no una predicción directa del modelo).</li>
+       </ol>
+    </div>
+  </div>
+</div>
+
+<h2 class="sec">1. Desempeño del modelo (estado actual)</h2>
+<div id="kpis_dinamicos" class="kpi-grid"></div>
+
+
+<div class="grid21">
+  <div class="card"><h3>Matriz de confusión (test 2025-2026)</h3>
+  <p class="hint">Comparación de predicciones contra lo realmente ocurrido.</p>
+  <div style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap;">
+      <div style="width:240px; height:240px; text-align:center;">
+          <h4 style="font-size:14px; margin-bottom:10px;">Alertas emitidas por el modelo</h4>
+          <canvas id="cmAlertasPieChart"></canvas>
+      </div>
+      <div style="width:240px; height:240px; text-align:center;">
+          <h4 style="font-size:14px; margin-bottom:10px;">Colapsos reales ocurridos</h4>
+          <canvas id="cmRealesPieChart"></canvas>
+      </div>
+  </div>
+</div>
+  <div class="card"><h3>Importancia de variables (SHAP)</h3>
+  <p class="hint">Pase el cursor sobre las variables para ver su explicación y valor.</p>
+  <canvas id="shapChart" height="230"></canvas></div>
+</div>
+
+
+
+<h2 class="sec">2. Desglose entrenamiento (real vs predicho)</h2>
+<div class="card"><h3>2. Centros con colapsos por semana</h3>
+<p class="hint">Nº de centros en alerta cada semana del test. <span style="color:#28A745;font-weight:700">&#9679; alerta correcta</span> · <span style="color:#FF7A00;font-weight:700">&#9679; falsa alarma</span> · <span style="color:#DC3545;font-weight:700">&#9679; colapso no detectado</span>.</p>
+<label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#555; cursor:pointer; margin-bottom:8px;">
+  <input type="checkbox" id="alert_pct_toggle"> Ver como % (proporci&oacute;n de cada semana)
+</label>
+<canvas id="alertChart" height="90"></canvas>
+<div id="alert-chart-stacked-bar-container" style="display:none; margin-top: 15px; width: 100%; height: 24px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);"></div>
+<div id="alert-map" style="display:none; margin-top: 15px; width: 100%; height: 350px; border-radius: 8px; box-shadow: var(--sh); border: 1px solid #ccc; z-index: 1;"></div>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+    <h3 style="margin:0;">Volumen semanal, umbral de colapso y alertas del modelo</h3>
+    <div style="font-size:0.85rem; display:flex; gap:10px; flex-wrap:wrap; margin-top: 4px;">
+      <a href="#" id="tab-vol-oscilador" onclick="setVolVariant('oscilador'); return false;" style="color:var(--mut); text-decoration:none; border-bottom:2px solid transparent; padding-bottom:2px;">Oscilador (Cero)</a>
+      <a href="#" id="tab-vol-macro" onclick="setVolVariant('macro'); return false;" style="font-weight:bold; color:var(--blue); text-decoration:none; border-bottom:2px solid var(--blue); padding-bottom:2px;">Macro (Sobrecarga)</a>
+      <a href="#" id="tab-vol-apilado" onclick="setVolVariant('apilado'); return false;" style="color:var(--mut); text-decoration:none; border-bottom:2px solid transparent; padding-bottom:2px;">Apilado (Estado)</a>
+    </div>
+  </div>
+<p class="hint">Azul: atenciones reales · gris: umbral de colapso del propio centro (mediana 12 sem + margen). 
+<span id="hint-vol-oscilador" style="display:none;">Oscilador &mdash; Fija el umbral en cero. Las barras muestran puramente el volumen excedente (+) o la capacidad ociosa (-).</span>
+<span id="hint-vol-macro">Macro (Sobrecarga) &mdash; Suma el volumen <strong>solo de los centros colapsados</strong>, mostrando la sobrecarga pura.</span>
+<span id="hint-vol-apilado" style="display:none;">Apilado (Estado) &mdash; Muestra el <strong>volumen total de la red</strong> desglosado en pacientes de centros con <span style="color:#28A745;font-weight:700">acierto</span>, <span style="color:#FF7A00;font-weight:700">falsa alarma</span> y <span style="color:#DC3545;font-weight:700">no detectados</span>.</span>
+</p>
+<canvas id="volChart" height="90"></canvas>
+<div id="status-page-timeline" style="display:flex; height:8px; width:100%; gap:2px; margin-top:8px;"></div>
+<div id="chart-stacked-bar-container" style="display:none; margin-top: 15px; width: 100%; height: 24px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);"></div>
+<div id="map" style="display:none; margin-top: 15px; width: 100%; height: 350px; border-radius: 8px; box-shadow: var(--sh); border: 1px solid #ccc; z-index: 1;"></div>
+</div>
+
+<div class="card" id="heatmap-card">
+  <h3>Mapa de Calor (Todos los centros)</h3>
+  <p class="hint">Visualización matricial rápida de alertas a lo largo del tiempo. 🟩 Acierto · 🟧 Falsa alarma · 🟥 No detectado · ⬜ Normal.</p>
+  <div style="overflow-x:auto; overflow-y:auto; max-height:400px; padding-right:5px;">
+    <div id="heatmap-container" style="display:flex; flex-direction:column; gap:2px; min-width:800px; padding-bottom:10px; margin-top:10px;"></div>
+  </div>
+</div>
+
+<div class="card" id="distribution-card">
+  <h3>Distribución Temporal de Colapsos Reales</h3>
+  <p class="hint">Proporción histórica de colapsos (aciertos + no detectados) agrupada por época del año.</p>
+  <div style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap; gap:20px; margin-top:15px;">
+    <div style="width: 45%; min-width:250px; max-width:400px;"><canvas id="seasonPieChart" height="200"></canvas></div>
+    <div style="width: 45%; min-width:250px; max-width:400px;"><canvas id="monthPieChart" height="200"></canvas></div>
+  </div>
+</div>
+
+<div id="heatmap-tooltip" style="display:none; position:absolute; z-index:9999; pointer-events:none; background:rgba(15, 23, 42, 0.95); border:1px solid #334155; border-radius:8px; padding:12px; box-shadow:0 10px 25px rgba(0,0,0,0.5); width:320px; color:#fff; font-size:12px; backdrop-filter:blur(4px);"></div>
+
+<h2 class="sec">4. Datos utilizados (2023–2026)</h2>
+<div class="card" style="border-left:5px solid var(--dark)">
+  <p class="hint">Volumen real de datos por variable y año (Región Metropolitana). Núcleo del modelo: <strong>atenciones (DEIS)</strong> + <strong>viral (FluNet)</strong>; el clima y MP2.5 son enriquecimiento <strong>opcional</strong> (ablación nula).</p>
+  <div style="overflow-x:auto">
+  <table>
+   <thead><tr><th>Fuente</th><th>Nivel</th><th style="text-align:right">2023</th><th style="text-align:right">2024</th><th style="text-align:right">2025</th><th style="text-align:right">2026*</th><th style="text-align:right">Total 2023–26</th></tr></thead>
+   <tbody>
+    <tr><td><strong>Atenciones (DEIS/SADU)</strong><br><span style="color:#888;font-size:.78rem">registros centro×semana</span></td><td>centro×semana</td><td style="text-align:right">2.548</td><td style="text-align:right">2.548</td><td style="text-align:right">2.597</td><td style="text-align:right">1.323</td><td style="text-align:right"><strong>9.016</strong></td></tr>
+    <tr><td style="color:#555">↳ atenciones (pacientes)</td><td></td><td style="text-align:right">602.134</td><td style="text-align:right">605.272</td><td style="text-align:right">551.947</td><td style="text-align:right">236.010</td><td style="text-align:right"><strong>1.995.363</strong></td></tr>
+    <tr><td style="color:#555">↳ hospitalizaciones</td><td></td><td style="text-align:right">12.749</td><td style="text-align:right">13.614</td><td style="text-align:right">15.144</td><td style="text-align:right">5.662</td><td style="text-align:right">47.169</td></tr>
+    <tr><td><strong>Viral (WHO FluNet)</strong><br><span style="color:#888;font-size:.78rem">positividad VRS + Influenza</span></td><td>nacional</td><td style="text-align:right">52</td><td style="text-align:right">52</td><td style="text-align:right">52</td><td style="text-align:right">26</td><td style="text-align:right"><strong>182 sem</strong></td></tr>
+    <tr><td><strong>Clima (DMC Quinta Normal)</strong><br><span style="color:#888;font-size:.78rem">temp mín · precipitación</span></td><td>regional</td><td style="text-align:right">52</td><td style="text-align:right">52</td><td style="text-align:right">52</td><td style="text-align:right">27</td><td style="text-align:right"><strong>183 sem</strong></td></tr>
+    <tr><td><strong>MP2.5 (SINCA)</strong><br><span style="color:#888;font-size:.78rem">comuna×semana · Escenario A</span></td><td>comuna×semana</td><td style="text-align:right">510</td><td style="text-align:right">519</td><td style="text-align:right">479</td><td style="text-align:right">241</td><td style="text-align:right"><strong>1.749</strong></td></tr>
+   </tbody>
+  </table>
+  </div>
+  <div class="takeaway"><strong>Cobertura:</strong> 49 establecimientos · 11 comunas RM · <strong>~2,0 millones</strong> de atenciones respiratorias. MP2.5 crudo: 13 estaciones, ~81.949 registros diarios agregados a semana. <em>2026 es parcial (año en curso).</em> Detalle: <code>dataset_salud/inventario_datos.md</code>.</div>
+</div>
+</div>
+</div>
+
+<div id="view-comparativa" style="display:none;">
+  <div class="container" style="max-width: 1400px; margin: 0 auto; padding-top: 1rem;">
+     <h2 class="sec">Comparativa de Escenarios (Leaderboard)</h2>
+     <!-- filters -->
+     <div class="card" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+         <div class="control-group">
+            <label>Tipo de Target</label>
+            <select id="comp-tipo" onchange="renderComparativa()">
+               <option value="">Todos</option>
+               <option value="nivel">Mediana/MAD (Robusto)</option>
+               <option value="sobre_tendencia">Media/Std (Clásico)</option>
+               <option value="salto_wow">Salto WoW (Shock)</option>
+               <option value="aumento_estandar">Aumento sobre Estándar</option>
+               <option value="aumento_reciente">Aumento sobre Tendencia</option>
+               <option value="estacional">Estacional Adaptativo</option>
+            </select>
+         </div>
+         <div class="control-group">
+            <label>Severidad</label>
+            <select id="comp-sev" onchange="renderComparativa()">
+               <option value="">Todas</option>
+               <option value="0.0">0%</option>
+               <option value="0.15">15%</option>
+               <option value="0.2">20%</option>
+            </select>
+         </div>
+         <div class="control-group">
+            <label>Ventana</label>
+            <select id="comp-ventana" onchange="renderComparativa()">
+               <option value="">Todas</option>
+               <option value="4">4 sem</option>
+               <option value="8">8 sem</option>
+               <option value="12">12 sem</option>
+            </select>
+         </div>
+         <div class="control-group" style="margin-left:auto;">
+             <label style="color:var(--mut);">Se muestran los 20 mejores resultados por PR-AUC</label>
+         </div>
+     </div>
+     <div class="card" style="padding:0;">
+        <table style="margin:0;">
+           <thead>
+              <tr>
+                 <th>Tipo</th>
+                 <th>Ventana</th>
+                 <th>k</th>
+                 <th>Sev.</th>
+                 <th>Clima</th>
+                 <th>Red</th>
+                 <th>Viral</th>
+                 <th>Z-rob</th>
+                 <th>PR-AUC <span style="font-size:0.7rem">▼</span></th>
+                 <th>Recall</th>
+                 <th>Precisión</th>
+                 <th>Acción</th>
+              </tr>
+           </thead>
+           <tbody id="comp-tbody">
+           </tbody>
+        </table>
+     </div>
+  </div>
+</div>
+
+<div id="view-evolucion" style="display:none;">
+  <div class="container" style="max-width: 1400px; margin: 0 auto; padding-top: 1rem;">
+    <h2 class="sec">Evolución de Modelos — Cómo se llegó al campeón</h2>
+    <p class="hint" style="margin:-.5rem 0 1.2rem">11 iteraciones registradas en la bitácora del proyecto (<code>notebooks/historico/log_ejecuciones.md</code>), desde el baseline lineal hasta las 4 definiciones de colapso candidatas. Datos reales de backtesting Train 2023-24 → Test 2025-26.</p>
+
+    <div class="kpi-grid" style="margin-bottom:1.5rem">
+      <div class="kpi" style="border-top-color:#DC3545">
+        <div class="t">Peor experimento</div>
+        <div class="v" style="font-size:1.5rem">0.208</div>
+        <div class="s">PR-AUC · v2 XGBoost inicial (peor que el baseline lineal 0.318) — descartado por sobreajuste</div>
+      </div>
+      <div class="kpi" style="border-top-color:var(--green)">
+        <div class="t">Campeón operativo</div>
+        <div class="v" style="font-size:1.5rem">0.770</div>
+        <div class="s">PR-AUC · v8 XGBoost + target robusto — recall 82.8% / precisión 52.3% (el que corre por defecto en el simulador)</div>
+      </div>
+      <div class="kpi" style="border-top-color:var(--pink)">
+        <div class="t">Mejor combinación (grid automático)</div>
+        <div class="v" style="font-size:1.5rem">0.948</div>
+        <div class="s">PR-AUC · aumento_reciente, ventana 12, k=1.0, solo Calor Robusto — techo teórico, no elegido por sesgo de prevalencia</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>1. Línea de tiempo del PR-AUC (11 iteraciones)</h3>
+      <p class="hint">Cada barra es una versión registrada en la bitácora, en orden cronológico. Azul = iteración normal · verde = campeón operativo elegido · rojo = experimento descartado por rendir peor que la versión anterior.</p>
+      <canvas id="lineageChart" height="100"></canvas>
+      <div class="takeaway">De 0.208 a 0.770 (+270%): el salto grande no vino de "mejor algoritmo" sino de dos decisiones puntuales — <strong>presión de red</strong> (v7, features espaciales sin fuga) y <strong>redefinir el target con una base robusta mediana+MAD</strong> (v8), que resultó ser la causa real del techo de precisión, no el clasificador.</div>
+    </div>
+
+    <div class="card">
+      <h3>2. Las 4 definiciones de colapso candidatas (V1–V4), comparadas en igualdad de condiciones</h3>
+      <p class="hint">Mismo XGBoost, mismo recall objetivo (~83%); solo cambia <em>qué cuenta como colapso</em>. Es la comparación que decide qué opción del selector "Definición del Colapso" usar en el Simulador.</p>
+      <canvas id="candidatesChart" height="110"></canvas>
+      <div class="takeaway">V2 (Aumento Estándar) gana en PR-AUC puro, pero V1 (Robusto) es el campeón operativo por generalizar mejor fuera del grid de calibración. V3 (Aumento Reciente) es el mejor compromiso visual+numérico: el umbral "abraza" la curva real y mantiene precisión 57.8%. V4 (Estacional) mejora el calce de forma (correlación 0.66→0.83) pero cuesta ~8 puntos de precisión por historial climático corto (solo 2 años).</div>
+    </div>
+
+    <div class="card">
+      <h3>3. Tabla completa de iteraciones</h3>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Versión</th><th>Modelo</th><th style="text-align:right">PR-AUC</th><th style="text-align:right">Precisión</th><th style="text-align:right">Recall</th><th style="text-align:right">F1</th><th>Qué cambió</th></tr></thead>
+        <tbody id="evo-tbody"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <h2 class="sec" style="margin-top:2rem">Conclusiones de cada quiebre</h2>
+    <div class="grid2">
+      <div class="ins pink">
+        <strong>① Por qué el primer XGBoost falló (v2, PR-AUC 0.208 &lt; 0.318 baseline).</strong> El problema era casi puramente lineal (dominado por la ola viral nacional), así que un modelo complejo solo aprendió ruido de los centros (overfitting). Por parsimonia, el campeón provisional volvió a ser la Regresión Logística Lasso.
+      </div>
+      <div class="ins blue">
+        <strong>② El quiebre real: features sin fuga + presión de red (v3→v7, 0.427→0.607).</strong> Z-score de calor reciente, momentum y, sobre todo, <em>presión espacial</em> (tasa de alerta de los otros centros de la misma comuna/servicio) fue la mejora que más subió el PR-AUC. Ahí XGBoost por fin superó a la Logística.
+      </div>
+      <div class="ins green">
+        <strong>③ El techo estaba en la etiqueta, no en el modelo (v8, 0.607→0.770).</strong> El estancamiento crónico (83% recall / 42% precisión) no se resolvía afinando el clasificador: la base media±σ de 4 semanas era ruidosa y perseguía su propia serie. Cambiarla por mediana+1.5·MAD de 8 semanas subió la precisión de 42%→52% con el mismo XGBoost. Campeón operativo declarado.
+      </div>
+      <div class="ins pink">
+        <strong>④ De anomalía estadística a quiebre operativo (V1→V2).</strong> V1 alertaba por "ruido estadístico atípico" (922 alertas, fatiga de alertas). V2 exige superar la capacidad histórica del centro en +15%, bajando a 498 casos reales — operativamente superior aunque el PR-AUC cae levemente (0.86→0.84 según el grid de ese momento).
+      </div>
+      <div class="ins blue">
+        <strong>⑤ El umbral que sigue la curva real (V2→V3).</strong> V2 usaba un techo histórico rígido, desconectado en años atípicos. V3 lo reemplaza por una mediana móvil de 4 semanas del propio centro: el umbral "abraza" el volumen real y solo se dispara ante shocks volumétricos verdaderos.
+      </div>
+      <div class="ins green">
+        <strong>⑥ Forma visual vs. poder predictivo (V3 vs V4).</strong> V4 (climatología por semana del año) mejora la correlación de forma umbral↔real de 0.66 a 0.83, pero cuesta ~8 puntos de precisión: solo hay 2 años de historial (2023-24) para calcular "lo normal" de cada semana, y ese ruido de etiqueta no lo compensan las features actuales.
+      </div>
+    </div>
+
+    <div class="disclaimer" style="margin-top:1.5rem">
+      <strong>Recomendación final:</strong> mantener <strong>v8 (target Robusto / "nivel")</strong> como campeón operativo del Simulador — mejor generalización fuera del grid de calibración. Usar <strong>V3 (Aumento sobre Tendencia)</strong> cuando se necesite que el gráfico de umbral sea legible/creíble para presentación. Reservar <strong>V4 (Estacional)</strong> para cuando se acumulen más años de historia (mejora con cada año adicional, a diferencia de V3). La combinación de <strong>PR-AUC 0.948</strong> del grid automático queda documentada como techo teórico, pero no se adopta por defecto: su k=1.0 sin ventana media infla la prevalencia de "colapso" y sesga la métrica.
+    </div>
+  </div>
+</div>
+
+<div id="view-configia" style="display:none; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;">
+    <!-- Encabezado -->
+    <div style="background: #fff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: 1px solid #fde68a;">
+            ⚙️
+        </div>
+        <div>
+            <h2 style="margin: 0; color: #1e293b; font-size: 1.25rem; font-weight: 600;">Configuración del análisis IA</h2>
+            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem;">Ajusta el <strong>Prompt validador</strong> que se envía a Gemini (Vertex AI) como instrucción del sistema. Los cambios aplican a los próximos análisis.</p>
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 2rem; align-items: flex-start;">
+        <!-- Panel Izquierdo: Editor -->
+        <div style="flex: 2; background: #fff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; color: #1e293b; font-size: 1rem;">Prompt validador</h3>
+                <span id="badge-prompt-status" style="background: #fef3c7; color: #d97706; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; border: 1px solid #fde68a;">Cargando...</span>
+            </div>
+            
+            <textarea id="prompt-editor" style="width: 100%; height: 350px; padding: 1rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family: monospace; font-size: 0.95rem; resize: vertical; margin-bottom: 1rem;" onkeyup="updatePromptLength()"></textarea>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="prompt-length" style="color: #94a3b8; font-size: 0.85rem;">0 caracteres</span>
+                <div style="display: flex; gap: 1rem;">
+                    <button onclick="restoreDefaultPrompt()" style="background: #fff; border: 1px solid #cbd5e1; color: #475569; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s;">Restaurar default</button>
+                    <button id="btn-guardar-prompt" onclick="savePromptConfig()" style="background: #d4a373; border: none; color: #fff; padding: 0.5rem 1.5rem; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s;">Guardar prompt</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Derecho: Historial -->
+        <div style="flex: 1; background: #fff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin: 0 0 0.5rem 0; color: #1e293b; font-size: 1rem;">Historial de versiones</h3>
+            <p style="margin: 0 0 1.5rem 0; color: #64748b; font-size: 0.85rem;">Cada guardado queda archivado. Carga una versión anterior en el editor y guárdala para revertir.</p>
+            
+            <div id="historial-versiones-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="color: #94a3b8; font-size: 0.9rem;">Aún no hay versiones guardadas.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+Chart.defaults.font.family="'Roboto',sans-serif"; Chart.defaults.color='#09567B';
+let shapChartObj, alertChartObj, volChartObj, seasonPieChartObj, monthPieChartObj;
+window.meta_centros = {};
+
+function closeCustomTooltip() {
+  const tt = document.getElementById('chartjs-custom-tooltip');
+  if (tt) {
+      tt.style.opacity = 0;
+      tt.style.pointerEvents = 'none';
+  }
+  try {
+      [volChartObj, alertChartObj].forEach(chart => {
+          if (chart) {
+              chart.setActiveElements([]);
+              if (chart.tooltip) chart.tooltip.setActiveElements([], {x:0, y:0});
+              chart.update();
+              if (chart.options && chart.options.onHover) chart.options.onHover(new Event('mouseleave'), [], chart);
+          }
+      });
+  } catch(e) {}
+}
+
+window.volVariant = 'macro';
+function setVolVariant(variant) {
+  window.volVariant = variant;
+  
+  const tabs = ['oscilador', 'macro', 'apilado'];
+  tabs.forEach(t => {
+      const el = document.getElementById('tab-vol-' + t);
+      if (el) {
+          el.style.fontWeight = variant === t ? 'bold' : 'normal';
+          el.style.color = variant === t ? 'var(--blue)' : 'var(--mut)';
+          el.style.borderBottomColor = variant === t ? 'var(--blue)' : 'transparent';
+      }
+      const hint = document.getElementById('hint-vol-' + t);
+      if (hint) hint.style.display = variant === t ? 'inline' : 'none';
+  });
+  
+  if (variant === 'oscilador') {
+    volChartObj.data.datasets[2].type = 'bar'; volChartObj.data.datasets[3].type = 'bar'; volChartObj.data.datasets[4].type = 'bar';
+    volChartObj.data.datasets[2].barPercentage = 0.5; volChartObj.data.datasets[3].barPercentage = 0.5; volChartObj.data.datasets[4].barPercentage = 0.5;
+    volChartObj.data.datasets[2].categoryPercentage = 0.8; volChartObj.data.datasets[3].categoryPercentage = 0.8; volChartObj.data.datasets[4].categoryPercentage = 0.8;
+    volChartObj.data.datasets[2].backgroundColor = 'rgba(40, 167, 69, 1)'; volChartObj.data.datasets[2].borderColor = 'transparent'; volChartObj.data.datasets[2].borderWidth = 0;
+    volChartObj.data.datasets[3].backgroundColor = 'rgba(255, 122, 0, 1)'; volChartObj.data.datasets[3].borderColor = 'transparent'; volChartObj.data.datasets[3].borderWidth = 0;
+    volChartObj.data.datasets[4].backgroundColor = 'rgba(220, 53, 69, 1)'; volChartObj.data.datasets[4].borderColor = 'transparent'; volChartObj.data.datasets[4].borderWidth = 0;
+  } else if (variant === 'macro') {
+    volChartObj.data.datasets[2].type = 'bar'; volChartObj.data.datasets[3].type = 'bar'; volChartObj.data.datasets[4].type = 'bar';
+    volChartObj.data.datasets[2].barPercentage = 1.0; volChartObj.data.datasets[3].barPercentage = 1.0; volChartObj.data.datasets[4].barPercentage = 1.0;
+    volChartObj.data.datasets[2].categoryPercentage = 1.0; volChartObj.data.datasets[3].categoryPercentage = 1.0; volChartObj.data.datasets[4].categoryPercentage = 1.0;
+    volChartObj.data.datasets[2].backgroundColor = 'rgba(40, 167, 69, 0.7)'; volChartObj.data.datasets[2].borderColor = 'transparent'; volChartObj.data.datasets[2].borderWidth = 0;
+    volChartObj.data.datasets[3].backgroundColor = 'rgba(255, 122, 0, 0.7)'; volChartObj.data.datasets[3].borderColor = 'transparent'; volChartObj.data.datasets[3].borderWidth = 0;
+    volChartObj.data.datasets[4].backgroundColor = 'rgba(220, 53, 69, 0.7)'; volChartObj.data.datasets[4].borderColor = 'transparent'; volChartObj.data.datasets[4].borderWidth = 0;
+  } else if (variant === 'apilado') {
+    volChartObj.data.datasets[2].type = 'bar'; volChartObj.data.datasets[3].type = 'bar'; volChartObj.data.datasets[4].type = 'bar';
+    volChartObj.data.datasets[2].barPercentage = 1.0; volChartObj.data.datasets[3].barPercentage = 1.0; volChartObj.data.datasets[4].barPercentage = 1.0;
+    volChartObj.data.datasets[2].categoryPercentage = 1.0; volChartObj.data.datasets[3].categoryPercentage = 1.0; volChartObj.data.datasets[4].categoryPercentage = 1.0;
+    volChartObj.data.datasets[2].backgroundColor = '#28A745'; volChartObj.data.datasets[2].borderColor = 'transparent'; volChartObj.data.datasets[2].borderWidth = 0;
+    volChartObj.data.datasets[3].backgroundColor = '#FF7A00'; volChartObj.data.datasets[3].borderColor = 'transparent'; volChartObj.data.datasets[3].borderWidth = 0;
+    volChartObj.data.datasets[4].backgroundColor = '#DC3545'; volChartObj.data.datasets[4].borderColor = 'transparent'; volChartObj.data.datasets[4].borderWidth = 0;
+  }
+  
+  if (volChartObj && volChartObj.options.scales.x) {
+      volChartObj.options.scales.x.stacked = (variant === 'apilado');
+      volChartObj.options.scales.y.stacked = (variant === 'apilado');
+  }
+
+  if (variant === 'apilado') {
+      volChartObj.data.datasets[2].stack = 'Stack 0';
+      volChartObj.data.datasets[3].stack = 'Stack 0';
+      volChartObj.data.datasets[4].stack = 'Stack 0';
+      volChartObj.data.datasets[2].grouped = false;
+      volChartObj.data.datasets[3].grouped = false;
+      volChartObj.data.datasets[4].grouped = false;
+  } else {
+      delete volChartObj.data.datasets[2].stack;
+      delete volChartObj.data.datasets[3].stack;
+      delete volChartObj.data.datasets[4].stack;
+      delete volChartObj.data.datasets[2].grouped;
+      delete volChartObj.data.datasets[3].grouped;
+      delete volChartObj.data.datasets[4].grouped;
+  }
+
+  if(window.lastDataVol) updateVolChartData(window.lastDataVol);
+  if(volChartObj) volChartObj.update();
+}
+
+function renderStatusTimeline(volData) {
+   const container = document.getElementById('status-page-timeline');
+   if(!container) return;
+   
+   let html = '';
+   for(let i=0; i<volData.labels.length; i++) {
+       let color = '#f0f0f0';
+       let label = 'Normal';
+       if(volData.fn[i] !== null) { color = '#DC3545'; label = 'No detectado'; }
+       else if(volData.tp[i] !== null) { color = '#28A745'; label = 'Acierto'; }
+       else if(volData.fp[i] !== null) { color = '#FF7A00'; label = 'Falsa alarma'; }
+       
+       // El pad izquierdo coincide con el eje y del gráfico si es necesario, pero visualmente queda bien estirado.
+       html += `<div style="flex:1; background:${color}; border-radius:1px;" title="${volData.labels[i]}: ${label}"></div>`;
+   }
+   container.innerHTML = html;
+}
+
+function renderHeatmap(data) {
+    const container = document.getElementById('heatmap-container');
+    const card = document.getElementById('heatmap-card');
+    if (!container || !card || !window.detalleCentros || window.detalleCentros.length === 0) return;
+    
+    const isTodos = !document.getElementById('ctrl_centro').value;
+    card.style.display = isTodos ? 'block' : 'none';
+    if(!isTodos) return;
+
+    let centerCounts = {};
+    window.detalleCentros.forEach(weekObj => {
+        if(!weekObj) return;
+        Object.keys(weekObj).forEach(cCode => {
+            if(!centerCounts[cCode]) centerCounts[cCode] = { code: cCode, colapsos: 0 };
+            const res = weekObj[cCode].resultado;
+            if(res === 'acierto' || res === 'no_detectado') centerCounts[cCode].colapsos++;
+        });
+    });
+    
+    const sortedCenters = Object.values(centerCounts).sort((a, b) => b.colapsos - a.colapsos);
+    
+    let yearSpans = [];
+    let currentYear = null;
+    let yearCount = 0;
+    
+    let getSeason = (weekStr) => {
+        let w = parseInt(weekStr);
+        if (w >= 12 && w <= 24) return 'Otoño';
+        if (w >= 25 && w <= 37) return 'Invierno';
+        if (w >= 38 && w <= 50) return 'Primavera';
+        return 'Verano';
+    };
+    
+    let getMonth = (weekStr, yStr) => {
+        let w = parseInt(weekStr);
+        let y = parseInt(yStr);
+        let d = new Date(y, 0, 1 + (w - 1) * 7);
+        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        return meses[d.getMonth()];
+    };
+    
+    let seasonSpans = [];
+    let currentSeason = null;
+    let seasonCount = 0;
+    
+    let monthSpans = [];
+    let currentMonth = null;
+    let monthCount = 0;
+    
+    data.volume.labels.forEach((w) => {
+        let y = w.split('-')[0];
+        if (y !== currentYear) {
+            if (currentYear) yearSpans.push({ label: currentYear, count: yearCount });
+            currentYear = y;
+            yearCount = 1;
+        } else {
+            yearCount++;
+        }
+        
+        let wNum = w.split('-W')[1];
+        let s = getSeason(wNum);
+        if (s !== currentSeason) {
+            if (currentSeason) seasonSpans.push({ label: currentSeason, count: seasonCount });
+            currentSeason = s;
+            seasonCount = 1;
+        } else {
+            seasonCount++;
+        }
+        
+        let m = getMonth(wNum, y);
+        if (m !== currentMonth) {
+            if (currentMonth) monthSpans.push({ label: currentMonth, count: monthCount });
+            currentMonth = m;
+            monthCount = 1;
+        } else {
+            monthCount++;
+        }
+    });
+    if (currentYear) yearSpans.push({ label: currentYear, count: yearCount });
+    if (currentSeason) seasonSpans.push({ label: currentSeason, count: seasonCount });
+    if (currentMonth) monthSpans.push({ label: currentMonth, count: monthCount });
+    
+    let html = '';
+    
+    html += `<div style="display:flex; gap:2px; margin-bottom:2px;">`;
+    html += `<div style="width:160px; flex-shrink:0;"></div>`;
+    yearSpans.forEach(ys => {
+        html += `<div style="flex:${ys.count}; text-align:center; font-size:11px; font-weight:bold; color:var(--dark); border-bottom:1px solid #ccc; padding-bottom:2px;">${ys.label}</div>`;
+    });
+    html += `</div>`;
+    
+    html += `<div style="display:flex; gap:2px; margin-bottom:2px;">`;
+    html += `<div style="width:160px; flex-shrink:0;"></div>`;
+    seasonSpans.forEach(ss => {
+        html += `<div style="flex:${ss.count}; text-align:center; font-size:10px; color:#555; background:#f8f9fa; border-radius:2px;">${ss.label}</div>`;
+    });
+    html += `</div>`;
+    
+    html += `<div style="display:flex; gap:2px; margin-bottom:2px;">`;
+    html += `<div style="width:160px; flex-shrink:0;"></div>`;
+    monthSpans.forEach(ms => {
+        html += `<div style="flex:${ms.count}; text-align:center; font-size:9px; color:#666; background:#e9ecef; border-radius:2px; padding:1px 0;">${ms.label}</div>`;
+    });
+    html += `</div>`;
+    
+    html += `<div style="display:flex; gap:2px; margin-bottom:4px;">`;
+    html += `<div style="width:160px; flex-shrink:0;"></div>`;
+    data.volume.labels.forEach((w, i) => {
+        let wNum = w.split('-W')[1];
+        html += `<div style="flex:1; text-align:center; font-size:9px; color:#888;">${i % 4 === 0 ? wNum : ''}</div>`;
+    });
+    html += `</div>`;
+    
+    sortedCenters.forEach(c => {
+        let cName = window.meta_centros[c.code] ? window.meta_centros[c.code].name : c.code;
+        html += `<div style="display:flex; gap:2px; align-items:center; margin-bottom:1px;">`;
+        html += `<div style="width:160px; flex-shrink:0; font-size:11px; color:var(--dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right; padding-right:8px;" title="${cName}">${cName}</div>`;
+        
+        data.volume.labels.forEach((w, i) => {
+            const weekObj = window.detalleCentros[i];
+            let color = '#f5f5f5';
+            let title = 'Normal';
+            if (weekObj && weekObj[c.code]) {
+                const res = weekObj[c.code].resultado;
+                if (res === 'acierto') { color = '#28A745'; title = 'Acierto'; }
+                else if (res === 'no_detectado') { color = '#DC3545'; title = 'No detectado'; }
+                else if (res === 'falsa_alarma') { color = '#FF7A00'; title = 'Falsa alarma'; }
+            }
+            html += `<div style="flex:1; height:14px; background:${color}; border-radius:2px; cursor:pointer;" 
+                       onmousemove="showHeatmapTooltip(event, '${c.code}', ${i}, '${w}')" 
+                       onmouseleave="hideHeatmapTooltip()"></div>`;
+        });
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+function showHeatmapTooltip(e, code, weekIndex, weekLabel) {
+    const tooltip = document.getElementById('heatmap-tooltip');
+    if (!tooltip || !window.detalleCentros || !window.detalleCentros[weekIndex]) return;
+    
+    const d = window.detalleCentros[weekIndex][String(code).trim()];
+    if (!d) return;
+
+    let cName = window.meta_centros && window.meta_centros[code] ? window.meta_centros[code].name : code;
+    
+    const ventanaN = window.ventanaActual || (d.historial ? d.historial.length : 0);
+    const ventanaTxt = ventanaN ? `últimas ${ventanaN} semanas` : 'ventana reciente';
+    const margenPct = d.normal > 0 ? (d.margen / d.normal * 100) : 0;
+    
+    const row = (label, val) => `<tr><td style="padding:3px 6px 3px 0; color:#bbb;">${label}</td><td style="padding:3px 0; text-align:right; font-weight:bold; white-space:nowrap;">${val}</td></tr>`;
+    
+    const resColor = {
+        'acierto': '#28A745',       // Verde
+        'falsa_alarma': '#FF7A00',  // Naranja
+        'no_detectado': '#DC3545'   // Rojo
+    }[d.resultado] || '#5bc0de';    // Celeste normal
+
+    const resultadoTxt = {
+        'acierto': '🟢 Acierto',
+        'falsa_alarma': '🟠 Falsa alarma',
+        'no_detectado': '🔴 No detectado'
+    }[d.resultado] || '⬜ Normal';
+
+    let html = `<div style="font-weight:bold; color:#ACE4FC; font-size:12px; margin-bottom:6px; border-bottom:1px solid #334155; padding-bottom:6px;">${weekLabel}: ${cName}</div>`;
+    
+    html += `<table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:8px;">`;
+    html += row(`Lo normal (${ventanaTxt})`, `${d.normal.toFixed(1)} pac.`);
+    html += row('Margen de tolerancia', `+${d.margen.toFixed(1)} pac. (+${margenPct.toFixed(0)}%)`);
+    html += row('Umbral de colapso', `<span style="color:#FF7A00">${d.umbral.toFixed(1)} pac.</span>`);
+    html += row('Volumen real', `<span style="color:${resColor}">${d.real.toFixed(1)} pac.</span>`);
+    html += row('Prob. modelo', `${(d.prob*100).toFixed(0)}%`);
+    html += row('Resultado', resultadoTxt);
+    html += `</table>`;
+    
+    html += `<div style="font-weight:bold; color:#ACE4FC; font-size:11px; margin-bottom:4px;">Variación reciente</div>`;
+    html += `<div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">`;
+    html += buildSparklineSVG(d.historial, d.normal, d.umbral, d.real, resColor);
+    html += `</div>`;
+    
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+    
+    let x = e.pageX + 15;
+    let y = e.pageY + 15;
+    if (x + 340 > window.innerWidth) x = e.pageX - 340;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+}
+
+function hideHeatmapTooltip() {
+    const tooltip = document.getElementById('heatmap-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+}
+
+function updateDistributionCharts(data) {
+    if (!data.volume || !seasonPieChartObj || !monthPieChartObj) return;
+    
+    const cSelect = document.getElementById('ctrl_centro');
+    const isTodos = !cSelect.value;
+    
+    let seasonCounts = { 'Otoño': 0, 'Invierno': 0, 'Primavera': 0, 'Verano': 0 };
+    let monthCounts = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0 };
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    
+    data.volume.labels.forEach((label, i) => {
+        const parts = label.split('-W');
+        if (parts.length !== 2) return;
+        const year = parseInt(parts[0], 10);
+        const w = parseInt(parts[1], 10);
+        
+        let colapsos = 0;
+        if (isTodos) {
+            let tpC = data.volume.tp_centers && data.volume.tp_centers[i] ? data.volume.tp_centers[i].length : 0;
+            let fnC = data.volume.fn_centers && data.volume.fn_centers[i] ? data.volume.fn_centers[i].length : 0;
+            colapsos = tpC + fnC;
+        } else {
+            let tpC = data.volume.tp[i] !== null ? 1 : 0;
+            let fnC = data.volume.fn[i] !== null ? 1 : 0;
+            colapsos = tpC + fnC;
+        }
+        
+        if (colapsos > 0) {
+            let season = 'Verano';
+            if (w >= 12 && w <= 24) season = 'Otoño';
+            else if (w >= 25 && w <= 37) season = 'Invierno';
+            else if (w >= 38 && w <= 50) season = 'Primavera';
+            seasonCounts[season] += colapsos;
+            
+            // Aproximación del mes basada en la semana ISO (4 de enero siempre está en la semana 1)
+            let d = new Date(year, 0, 4 + (w - 1) * 7);
+            monthCounts[d.getMonth()] += colapsos;
+        }
+    });
+    
+    seasonPieChartObj.data.labels = Object.keys(seasonCounts);
+    seasonPieChartObj.data.datasets[0].data = Object.values(seasonCounts);
+    seasonPieChartObj.update();
+    
+    let mLabels = [], mData = [], mBg = [];
+    const colors = ['#5C6BC0', '#42A5F5', '#26C6DA', '#26A69A', '#66BB6A', '#9CCC65', '#D4E157', '#FFEE58', '#FFCA28', '#FFA726', '#FF7043', '#8D6E63'];
+    for(let m=0; m<12; m++) {
+       if (monthCounts[m] > 0) {
+          mLabels.push(monthNames[m]);
+          mData.push(monthCounts[m]);
+          mBg.push(colors[m]);
+       }
+    }
+    monthPieChartObj.data.labels = mLabels;
+    monthPieChartObj.data.datasets[0].data = mData;
+    monthPieChartObj.data.datasets[0].backgroundColor = mBg;
+    monthPieChartObj.update();
+}
+
+// Convierte una etiqueta de semana ISO "YYYY-Wnn" en el rango de fechas real
+// (lunes a domingo) de esa semana, para mostrarlo en el eje X en vez del nº de semana.
+// Devuelve un arreglo de 2 líneas: ["08 Sep", "14 Sep"] => "desde / hasta".
+// El label interno sigue siendo "YYYY-Wnn" (lo usa el parsing de año/estación/mes).
+const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function isoWeekMonday(year, week) {
+  // Jueves 4 de enero siempre cae en la semana ISO 1.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Dow = (jan4.getUTCDay() + 6) % 7; // Lun=0 .. Dom=6
+  const week1Mon = new Date(jan4);
+  week1Mon.setUTCDate(jan4.getUTCDate() - jan4Dow);
+  const mon = new Date(week1Mon);
+  mon.setUTCDate(week1Mon.getUTCDate() + (week - 1) * 7);
+  return mon;
+}
+function fmtDia(d) {
+  return String(d.getUTCDate()).padStart(2, '0') + ' ' + MESES_ABREV[d.getUTCMonth()];
+}
+const MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+// Frase legible "del XX al XX de <mes>" para reemplazar el nº de semana ISO en textos —
+// nadie entiende "semana 28", pero todos entienden un rango de fechas.
+function fmtRangoSemana(anio, semana) {
+  const mon = isoWeekMonday(anio, semana);
+  const dom = new Date(mon); dom.setUTCDate(mon.getUTCDate() + 6);
+  const dMon = String(mon.getUTCDate()).padStart(2, '0');
+  const dDom = String(dom.getUTCDate()).padStart(2, '0');
+  if (mon.getUTCMonth() === dom.getUTCMonth()) {
+    return `del ${dMon} al ${dDom} de ${MESES_LARGOS[mon.getUTCMonth()]}`;
+  }
+  return `del ${dMon} de ${MESES_LARGOS[mon.getUTCMonth()]} al ${dDom} de ${MESES_LARGOS[dom.getUTCMonth()]}`;
+}
+function isoWeekTick(label) {
+  const m = /^(\d{4})-W(\d{1,2})$/.exec(String(label));
+  if (!m) return label; // formato inesperado: se muestra tal cual
+  const mon = isoWeekMonday(+m[1], +m[2]);
+  const dom = new Date(mon);
+  dom.setUTCDate(mon.getUTCDate() + 6);
+  return [fmtDia(mon), fmtDia(dom)]; // dos líneas: desde arriba, hasta abajo
+}
+// Lunes (00:00 UTC) de la semana ISO en que cae `date` — misma convención que isoWeekMonday.
+function isoMondayOfDate(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dow = (d.getUTCDay() + 6) % 7; // Lun=0 .. Dom=6
+  d.setUTCDate(d.getUTCDate() - dow);
+  return d;
+}
+
+function updateVolChartData(volData) {
+  volChartObj.data.labels = volData.labels;
+  
+  let dataReal = volData.real;
+  let dataUmbral = volData.umbral;
+  
+  if (window.volVariant === 'macro') {
+      let mReal = [], mUmbral = [];
+      const isTodos = !document.getElementById('ctrl_centro').value;
+      if (isTodos && window.detalleCentros) {
+          for(let i=0; i<volData.labels.length; i++) {
+              let sumR = 0, sumU = 0;
+              const weekObj = window.detalleCentros[i];
+              if (weekObj) {
+                  Object.keys(weekObj).forEach(cCode => {
+                      const d = weekObj[cCode];
+                      if (d.resultado !== 'normal') {
+                          sumR += d.real;
+                          sumU += d.umbral;
+                      }
+                  });
+              }
+              mReal.push(sumR);
+              mUmbral.push(sumU);
+          }
+          dataReal = mReal;
+          dataUmbral = mUmbral;
+      }
+  }
+  
+  if (window.volVariant === 'apilado') {
+      let mTP = [], mFP = [], mFN = [];
+      const isTodos = !document.getElementById('ctrl_centro').value;
+      for(let i=0; i<volData.labels.length; i++) {
+          let sTP = null, sFP = null, sFN = null;
+          if (isTodos && window.detalleCentros) {
+              sTP = 0; sFP = 0; sFN = 0;
+              const weekObj = window.detalleCentros[i];
+              if (weekObj) {
+                  Object.keys(weekObj).forEach(cCode => {
+                      const d = weekObj[cCode];
+                      if (d.resultado === 'acierto') sTP += d.real;
+                      else if (d.resultado === 'falsa_alarma') sFP += d.real;
+                      else if (d.resultado === 'no_detectado') sFN += d.real;
+                  });
+              }
+              if (sTP===0 && sFP===0 && sFN===0 && !weekObj) { sTP=null; sFP=null; sFN=null; }
+          } else {
+              if (volData.tp[i] !== null) sTP = volData.real[i];
+              if (volData.fp[i] !== null) sFP = volData.real[i];
+              if (volData.fn[i] !== null) sFN = volData.real[i];
+          }
+          
+          let base = 0;
+          if (sTP !== null) { mTP.push([base, base + sTP]); base += sTP; } else { mTP.push(null); }
+          if (sFP !== null) { mFP.push([base, base + sFP]); base += sFP; } else { mFP.push(null); }
+          if (sFN !== null) { mFN.push([base, base + sFN]); base += sFN; } else { mFN.push(null); }
+      }
+      volChartObj.data.datasets[0].data = [];
+      volChartObj.data.datasets[1].data = [];
+      volChartObj.data.datasets[2].data = mTP;
+      volChartObj.data.datasets[3].data = mFP;
+      volChartObj.data.datasets[4].data = mFN;
+      return;
+  }
+
+  if (window.volVariant === 'oscilador') {
+      let ceros = new Array(volData.labels.length).fill(0);
+      let oscReal = dataReal.map((r,i) => r - dataUmbral[i]);
+      volChartObj.data.datasets[0].data = oscReal;
+      volChartObj.data.datasets[1].data = ceros;
+      volChartObj.data.datasets[0].borderColor = 'rgba(9, 86, 123, 0.2)';
+      volChartObj.data.datasets[0].backgroundColor = 'rgba(9, 86, 123, 0.05)';
+      volChartObj.data.datasets[1].borderColor = '#333';
+  } else {
+      volChartObj.data.datasets[0].data = dataReal;
+      volChartObj.data.datasets[1].data = dataUmbral;
+      volChartObj.data.datasets[0].borderColor = '#09567B';
+      volChartObj.data.datasets[0].backgroundColor = '#09567B';
+      volChartObj.data.datasets[1].borderColor = '#aaa';
+  }
+  
+  let tpBars = [], fpBars = [], fnBars = [];
+  for(let i=0; i<volData.labels.length; i++) {
+      if (window.volVariant === 'oscilador') {
+          let exc = dataReal[i] - dataUmbral[i];
+          tpBars.push(volData.tp[i] !== null ? [0, exc] : null);
+          fpBars.push(volData.fp[i] !== null ? [0, exc] : null);
+          fnBars.push(volData.fn[i] !== null ? [0, exc] : null);
+      } else {
+          tpBars.push(volData.tp[i] !== null ? [dataUmbral[i], dataReal[i]] : null);
+          fpBars.push(volData.fp[i] !== null ? [dataUmbral[i], dataReal[i]] : null);
+          fnBars.push(volData.fn[i] !== null ? [dataUmbral[i], dataReal[i]] : null);
+      }
+  }
+  volChartObj.data.datasets[2].data = tpBars;
+  volChartObj.data.datasets[3].data = fpBars;
+  volChartObj.data.datasets[4].data = fnBars;
+  if(volData.tp_centers) volChartObj.data.datasets[2].centers = volData.tp_centers;
+  if(volData.fp_centers) volChartObj.data.datasets[3].centers = volData.fp_centers;
+  if(volData.fn_centers) volChartObj.data.datasets[4].centers = volData.fn_centers;
+  volChartObj.update();
+  renderStatusTimeline(volData);
+}
+
+const customTooltip = (context) => {
+  const {chart, tooltip} = context;
+  let tooltipEl = document.getElementById('chartjs-custom-tooltip');
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'chartjs-custom-tooltip';
+    Object.assign(tooltipEl.style, {
+      background: 'rgba(0, 0, 0, 0.88)',
+      borderRadius: '8px',
+      color: 'white',
+      opacity: 1,
+      pointerEvents: 'auto',
+      position: 'absolute',
+      transition: 'opacity .15s ease',
+      padding: '15px',
+      zIndex: 9999,
+      width: 'max-content',
+      maxWidth: '95vw',
+      maxHeight: '88vh',
+      overflowY: 'auto',
+      boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
+      fontFamily: "'Roboto', sans-serif"
+    });
+    document.body.appendChild(tooltipEl);
+  }
+
+  if (tooltip.opacity === 0) {
+    tooltipEl.style.opacity = 0;
+    tooltipEl.style.pointerEvents = 'none';
+    return;
+  }
+
+  const cSelect = document.getElementById('ctrl_centro');
+  const isTodos = !cSelect.value;
+
+  let volReal = '';
+  let umbralColapso = '';
+  let colapsosReales = '';
+  let alertasPredichas = '';
+  
+  let iIdx = tooltip.dataPoints[0].dataIndex;
+  // Always use the real un-altered data for tooltip display (critical for Oscilador where datasets 0 and 1 are morphed)
+  if (window.lastDataVol) {
+      volReal = window.lastDataVol.real[iIdx] !== null ? window.lastDataVol.real[iIdx].toFixed(1) : '';
+      umbralColapso = window.lastDataVol.umbral[iIdx] !== null ? window.lastDataVol.umbral[iIdx].toFixed(1) : '';
+  }
+  
+  tooltip.dataPoints.forEach(dp => {
+     if (dp.dataset.label === 'Colapsos reales') colapsosReales = dp.parsed.y !== null ? dp.parsed.y.toFixed(0) : '';
+     if (dp.dataset.label === 'Alertas predichas') alertasPredichas = dp.parsed.y !== null ? dp.parsed.y.toFixed(0) : '';
+  });
+
+  let innerHtml = `<div style="position: absolute; top: 12px; right: 15px; cursor: pointer; font-size: 24px; color: #aaa; font-weight: bold; line-height: 1;" onclick="closeCustomTooltip()" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#aaa'">&times;</div>`;
+  innerHtml += `<div style="font-weight:bold; margin-bottom:12px; font-size:16px; border-bottom: 1px solid #555; padding-bottom:8px; display:flex; justify-content:space-between; align-items:center; padding-right: 35px;">
+      <span>Semana: ${tooltip.title[0] || ''}</span></div>`;
+
+  innerHtml += `<div style="display: flex; gap: 15px; flex-wrap: wrap;">`; 
+
+  let aciertoHtml = '';
+  let falsaAlarmaHtml = '';
+  let noDetectadoHtml = '';
+
+  tooltip.dataPoints.forEach(dp => {
+     const label = dp.dataset.label;
+     if (label === 'Volumen real' || label === 'Umbral de colapso' || label === 'Colapsos reales' || label === 'Alertas predichas') return;
+     
+     let yVal = dp.parsed.y;
+     if (dp.raw && Array.isArray(dp.raw)) yVal = Math.max(dp.raw[0], dp.raw[1]);
+     const val = yVal !== null && yVal !== undefined ? yVal.toFixed(1) : '';
+     let colHtml = `<div style="flex: 1; min-width: 220px; max-width: 350px; font-size: 12px; background: rgba(255,255,255,0.06); padding: 12px; border-radius: 6px;">`;
+     
+     if (label === 'Acierto') {
+         colHtml += `<div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-bottom:4px;">🟢 Aciertos ${isTodos ? '(Vista agregada)' : ''}</div>`;
+         colHtml += `<div style="color:#ccc; font-size:11px;">El modelo alertó correctamente un colapso real.</div>`;
+         colHtml += `<div style="margin-top:6px; font-weight:bold;">Suma en la semana: ${val}</div>`;
+     } else if (label === 'Falsa alarma') {
+         colHtml += `<div style="color:#FF9800; font-weight:bold; font-size:14px; margin-bottom:4px;">🟠 Falsas Alarmas ${isTodos ? '(Vista agregada)' : ''}</div>`;
+         colHtml += `<div style="color:#ccc; font-size:11px;">El modelo alertó, pero el volumen fue normal.</div>`;
+         colHtml += `<div style="margin-top:6px; font-weight:bold;">Suma en la semana: ${val}</div>`;
+     } else if (label === 'No detectado') {
+         colHtml += `<div style="color:#F44336; font-weight:bold; font-size:14px; margin-bottom:4px;">🔴 No detectados ${isTodos ? '(Vista agregada)' : ''}</div>`;
+         colHtml += `<div style="color:#ccc; font-size:11px;">Hubo colapso real, pero el modelo no alertó.</div>`;
+         colHtml += `<div style="margin-top:6px; font-weight:bold;">Suma en la semana: ${val}</div>`;
+     }
+     
+     if (isTodos && dp.dataset.centers && dp.dataset.centers[dp.dataIndex]) {
+         const codes = dp.dataset.centers[dp.dataIndex];
+         if (codes.length > 0) {
+             colHtml += `<div style="margin-top: 12px; border-top: 1px dotted #555; padding-top: 8px;">`;
+             colHtml += `<strong>Detalle de centros implicados (${codes.length}):</strong><ul style="margin:5px 0; padding-left:20px; list-style-type:disc; line-height: 1.4; color:#ddd;">`;
+             const maxList = 12;
+             for (let i = 0; i < Math.min(codes.length, maxList); i++) {
+                 let cText = codes[i];
+                 for (let opt of cSelect.options) { if (opt.value == codes[i]) cText = opt.text; }
+                 colHtml += `<li style="cursor:pointer;" onmouseover="showCentroDetalle('${codes[i]}', ${dp.dataIndex}, this)" onmouseout="restoreResumenGlobal()">${cText}</li>`;
+             }
+             if (codes.length > maxList) {
+                 colHtml += `<li><em style="color:#aaa;">... y ${codes.length - maxList} centros más</em></li>`;
+             }
+             colHtml += `</ul></div>`;
+         }
+     }
+     colHtml += `</div>`;
+     
+     if (label === 'Acierto') aciertoHtml = colHtml;
+     else if (label === 'Falsa alarma') falsaAlarmaHtml = colHtml;
+     else if (label === 'No detectado') noDetectadoHtml = colHtml;
+  });
+
+  innerHtml += aciertoHtml + falsaAlarmaHtml + noDetectadoHtml;
+  
+  if (colapsosReales !== '' || alertasPredichas !== '' || volReal !== '' || umbralColapso !== '') {
+      let resumenInner = `<div style="color:#ACE4FC; font-weight:bold; font-size:14px; margin-bottom:4px;">📊 Resumen Global</div>`;
+      resumenInner += `<div style="color:#ccc; font-size:11px; margin-bottom: 12px;">Métricas totales de la semana. <em>Pasa el mouse sobre un centro (izquierda) para ver su detalle.</em></div>`;
+
+      if (colapsosReales !== '') resumenInner += `<div style="margin-top:6px; font-weight:bold;"><span style="color:#5bc0de;">■</span> Colapsos reales: ${colapsosReales}</div>`;
+      if (alertasPredichas !== '') resumenInner += `<div style="margin-top:6px; font-weight:bold;"><span style="color:#FF7A00;">■</span> Alertas predichas: ${alertasPredichas}</div>`;
+      if (volReal !== '') resumenInner += `<div style="margin-top:6px; font-weight:bold;"><span style="color:#5bc0de;">■</span> Volumen real: ${volReal}</div>`;
+      if (umbralColapso !== '') resumenInner += `<div style="margin-top:6px; font-weight:bold;"><span style="color:#aaa;">■</span> Umbral de colapso: ${umbralColapso}</div>`;
+
+      window._resumenGlobalDefaultHtml = resumenInner;
+      // Ancho FIJO (no flex:1 con min/max variable): evita que al intercambiar el contenido
+      // (resumen agregado <-> detalle de un centro) la caja cambie de ANCHO, reacomode las
+      // columnas vecinas por el flex-wrap, y mueva el <li> bajo el mouse -> parpadeo infinito
+      // de mouseover/mouseout (bug reportado 2026-07-10). El ALTO queda libre (como las demás
+      // columnas) para que no se vea recortado con scroll.
+      innerHtml += `<div id="resumenGlobalBox" style="flex: 0 0 260px; width: 260px; box-sizing: border-box; font-size: 12px; background: rgba(0, 158, 247, 0.1); padding: 12px; border-radius: 6px; border: 1px solid rgba(0, 158, 247, 0.3);">${resumenInner}</div>`;
+  }
+  
+  innerHtml += `</div>`;
+
+  // Fila inferior, 100% de ancho: se llena al pasar el mouse sobre un centro con el desglose
+  // completo (gráfico de sus últimas semanas + fórmula paso a paso). Vacía/oculta por defecto.
+  innerHtml += `<div id="centroDetalleRow" style="display:none; width:100%; margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.15);"></div>`;
+
+  tooltipEl.innerHTML = innerHtml;
+
+  const position = chart.canvas.getBoundingClientRect();
+  // Ancla en la esquina superior IZQUIERDA del canvas (no centrado): (1) evita que el modal,
+  // más ancho por la 4ta columna de detalle, se corra hacia la derecha y se salga de pantalla;
+  // (2) al anclar por ARRIBA (sin centrado vertical), cuando la fila de detalle inferior aparece
+  // el modal solo crece hacia ABAJO — no reubica el contenido de arriba, evitando el parpadeo
+  // mouseover/mouseout por reflow (bug reportado 2026-07-10).
+  const anchorX = position.left + window.scrollX + 10;
+  const anchorY = position.top + window.scrollY + 10;
+
+  tooltipEl.style.left = anchorX + 'px';
+  tooltipEl.style.top = anchorY + 'px';
+  tooltipEl.style.transform = 'translate(0, 0)';
+  tooltipEl.style.opacity = 1;
+  tooltipEl.style.pointerEvents = 'auto';
+};
+
+// Mini gráfico de barras en SVG (sin instanciar Chart.js) con las últimas semanas de un centro,
+// más líneas punteadas de "lo normal" (mediana) y el umbral. Se regenera en cada hover; al ser
+// SVG plano (no un objeto Chart persistente) no hay riesgo de fugas de memoria por repetición.
+function buildSparklineSVG(historial, normal, umbral, real, resColor) {
+  const serie = (historial || []).concat([real]);
+  if (serie.length === 0) return '<div style="color:#888; font-size:11px;">Sin historial suficiente.</div>';
+
+  const w = 320, h = 110, padL = 4, padR = 4, padT = 6, padB = 16;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const maxVal = Math.max(...serie, umbral, 1) * 1.12;
+  const n = serie.length;
+  const gap = plotW / n;
+  const barW = gap * 0.62;
+  const yFor = (v) => padT + plotH - (Math.min(v, maxVal) / maxVal) * plotH;
+
+  let bars = '';
+  serie.forEach((v, i) => {
+    const x = padL + i * gap + (gap - barW) / 2;
+    const y = yFor(v);
+    const barH = Math.max((padT + plotH) - y, 1);
+    const esActual = (i === n - 1);
+    
+    // Si pasamos un color explícito (resColor) lo usamos para la barra actual, si no caemos en el default
+    const defaultColor = real > umbral ? '#FF7A00' : '#5bc0de';
+    const finalColor = resColor ? resColor : defaultColor;
+    const color = esActual ? finalColor : 'rgba(91,192,222,0.45)';
+    
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="1.5"/>`;
+  });
+
+  const yNormal = yFor(normal), yUmbral = yFor(umbral);
+  let lines = `<line x1="${padL}" y1="${yNormal.toFixed(1)}" x2="${w - padR}" y2="${yNormal.toFixed(1)}" stroke="#aaa" stroke-width="1" stroke-dasharray="3,3"/>`;
+  lines += `<line x1="${padL}" y1="${yUmbral.toFixed(1)}" x2="${w - padR}" y2="${yUmbral.toFixed(1)}" stroke="#FF9800" stroke-width="1.2" stroke-dasharray="3,3"/>`;
+
+  let labels = `<text x="${w - padR}" y="${Math.max(yNormal - 3, 9).toFixed(1)}" text-anchor="end" font-size="8" fill="#bbb">mediana ${normal.toFixed(0)}</text>`;
+  labels += `<text x="${w - padR}" y="${Math.max(yUmbral - 3, 9).toFixed(1)}" text-anchor="end" font-size="8" fill="#FF9800">umbral ${umbral.toFixed(0)}</text>`;
+  labels += `<text x="${padL}" y="${h - 3}" font-size="8" fill="#888">semanas anteriores &rarr; esta semana</text>`;
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; max-height:120px; display:block;">${bars}${lines}${labels}</svg>`;
+}
+
+// Fórmula paso a paso: de la lista cruda de atenciones a la mediana, el margen y el umbral.
+function buildFormulaSteps(d, ventanaTxt, margenPct) {
+  const historialTxt = (d.historial && d.historial.length)
+    ? d.historial.map(v => Math.round(v)).join(', ')
+    : '(sin historial suficiente)';
+  const supera = d.real > d.umbral;
+  let html = `<ol style="padding-left:18px; margin:0; line-height:1.7; font-size:11.5px;">`;
+  html += `<li>Tomamos sus ${ventanaTxt}: <span style="color:#ccc;">[${historialTxt}]</span> pacientes.</li>`;
+  html += `<li>La mediana de esos valores = <b>${d.normal.toFixed(1)} pac.</b> &rarr; esto es "lo normal" de este centro.</li>`;
+  html += `<li>Margen de tolerancia = <b>+${d.margen.toFixed(1)} pac.</b> (+${margenPct.toFixed(0)}%) &rarr; <b>Umbral = ${d.normal.toFixed(1)} + ${d.margen.toFixed(1)} = ${d.umbral.toFixed(1)} pac.</b></li>`;
+  html += `<li>Esta semana el centro tuvo <b>${d.real.toFixed(1)} pac.</b> reales &rarr; ${supera ? '<span style="color:#FF7A00;">SUPERA</span>' : '<span style="color:#5bc0de;">no supera</span>'} su umbral.</li>`;
+
+  // El clasificador solo entrega P(colapso), no un volumen. Para dar una cifra de pacientes
+  // "equivalente" al %, escalamos linealmente: 0% -> lo normal, umbral de decisión del modelo
+  // (donde pasa de NO alertar a SÍ alertar) -> el umbral de colapso. Es una APROXIMACIÓN
+  // (no una segunda predicción del modelo) y se etiqueta como tal para no sugerir una precisión
+  // que el clasificador no tiene.
+  // Se exige margen > 0: con severidad=0 (config de producción) umbral == normal, el margen es
+  // cero y la fórmula colapsa a `estimado = normal` — un número que NO depende de la probabilidad
+  // del modelo. Mostrarlo atribuiría al clasificador una cifra que no produjo (bitácora §11.10).
+  const uProb = window.umbralProbActual;
+  let estimadoTxt = '';
+  if (uProb && uProb > 0 && d.margen > 0) {
+    const ratio = d.prob / uProb;
+    const estimado = d.normal + ratio * d.margen;
+    estimadoTxt = ` &asymp; <b>${estimado.toFixed(0)} pacientes</b> <span style="color:#999;">(aproximación, no una predicción directa del modelo)</span>`;
+  }
+  html += `<li>El modelo estimó <b>${(d.prob * 100).toFixed(0)}%</b> de probabilidad de colapso${estimadoTxt} &rarr; realmente llegaron <b>${d.real.toFixed(0)} pacientes</b> &rarr; ${d.alerta ? 'SÍ alertó' : 'NO alertó'}.</li>`;
+  html += `</ol>`;
+  return html;
+}
+
+// Al pasar el mouse sobre un centro en "Detalle de centros implicados": (1) reemplaza el panel
+// "Resumen Global" por el desglose numérico de ESE centro, y (2) llena la fila inferior de 100%
+// de ancho con el gráfico de sus últimas semanas + la fórmula paso a paso de cómo se calculó.
+function showCentroDetalle(code, weekIndex, liEl) {
+  const box = document.getElementById('resumenGlobalBox');
+  const detalleRow = document.getElementById('centroDetalleRow');
+  if (!box || !window.detalleCentros || !window.detalleCentros[weekIndex]) return;
+  const d = window.detalleCentros[weekIndex][String(code).trim()];
+  if (!d) return;
+
+  const cSelect = document.getElementById('ctrl_centro');
+  let name = code;
+  for (let opt of cSelect.options) { if (opt.value == code) name = opt.text; }
+
+  const resultadoTxt = {
+    'acierto': '🟢 Acierto — el modelo alertó y el colapso fue real.',
+    'falsa_alarma': '🟠 Falsa alarma — el modelo alertó, pero el volumen fue normal.',
+    'no_detectado': '🔴 No detectado — hubo colapso real y el modelo no alertó.'
+  }[d.resultado] || '';
+
+  const ventanaN = window.ventanaActual || (d.historial ? d.historial.length : 0);
+  const ventanaTxt = ventanaN ? `últimas ${ventanaN} semanas` : 'ventana reciente';
+  const margenPct = d.normal > 0 ? (d.margen / d.normal * 100) : 0;
+
+  const row = (label, val) => `<tr><td style="padding:3px 6px 3px 0; color:#bbb;">${label}</td><td style="padding:3px 0; text-align:right; font-weight:bold; white-space:nowrap;">${val}</td></tr>`;
+
+  let html = `<div style="color:#ACE4FC; font-weight:bold; font-size:13px; margin-bottom:2px;">📐 ${name}</div>`;
+  html += `<div style="color:#ccc; font-size:10px; margin-bottom:8px;">Cómo se definió su umbral esa semana.</div>`;
+  html += `<table style="width:100%; border-collapse:collapse; font-size:11px;">`;
+  html += row(`Lo normal de este centro (${ventanaTxt})`, `${d.normal.toFixed(1)} pac.`);
+  html += row('Margen de tolerancia', `+${d.margen.toFixed(1)} pac. (+${margenPct.toFixed(0)}%)`);
+  html += row('Umbral de colapso de ESE centro', `${d.umbral.toFixed(1)} pac.`);
+  html += row('Volumen real esa semana', `${d.real.toFixed(1)} pac.`);
+  html += row('Probabilidad de colapso (modelo)', `${(d.prob*100).toFixed(0)}%`);
+  html += row('¿Alertó el modelo?', d.alerta ? 'Sí' : 'No');
+  html += `</table>`;
+  html += `<div style="margin-top:8px; font-size:11px; line-height:1.3;">${resultadoTxt}</div>`;
+
+  box.innerHTML = html;
+
+  if (detalleRow) {
+    let detHtml = `<div style="display:flex; gap:24px; flex-wrap:wrap;">`;
+    detHtml += `<div style="flex:1; min-width:280px; max-width:360px;">`;
+    detHtml += `<div style="font-weight:bold; color:#ACE4FC; font-size:12px; margin-bottom:6px;">📈 Variación de ${name} (${ventanaTxt})</div>`;
+    detHtml += buildSparklineSVG(d.historial, d.normal, d.umbral, d.real);
+    detHtml += `</div>`;
+    detHtml += `<div style="flex:1; min-width:280px;">`;
+    detHtml += `<div style="font-weight:bold; color:#ACE4FC; font-size:12px; margin-bottom:6px;">🧮 ¿Cómo llegamos a este umbral?</div>`;
+    detHtml += buildFormulaSteps(d, ventanaTxt, margenPct);
+    detHtml += `</div>`;
+    detHtml += `</div>`;
+    detalleRow.innerHTML = detHtml;
+    detalleRow.style.display = 'block';
+  }
+}
+
+function restoreResumenGlobal() {
+  const box = document.getElementById('resumenGlobalBox');
+  if (box && window._resumenGlobalDefaultHtml) box.innerHTML = window._resumenGlobalDefaultHtml;
+  const detalleRow = document.getElementById('centroDetalleRow');
+  if (detalleRow) { detalleRow.style.display = 'none'; detalleRow.innerHTML = ''; }
+}
+
+// Shared variables for maps
+let alertMapObj = null, alertMapMarkers = [];
+let mapObj = null, mapMarkers = [];
+let lastHoveredIndexAlert = -1, lastHoveredIndexVol = -1;
+
+function createHoverHandler(barId, mapId, getMapVars, updateMarkers, getLastHovered, setLastHovered) {
+    return (event, activeElements, chart) => {
+        const barContainer = document.getElementById(barId);
+        const mapContainer = document.getElementById(mapId);
+        let { mapObjInstance, mapMarkersArr } = getMapVars();
+        
+        if (!activeElements || activeElements.length === 0) {
+            if (getLastHovered() !== -1) {
+                setLastHovered(-1);
+            }
+            
+            // Render global summary
+            const cSelect = document.getElementById('ctrl_centro');
+            const isTodos = !cSelect.value;
+            let tpCount = 0, fpCount = 0, fnCount = 0;
+            let centerAgg = {};
+            
+            [2, 3, 4].forEach(dsIndex => {
+                const dataset = chart.data.datasets[dsIndex];
+                let count = 0;
+                if (isTodos && dataset.centers) {
+                    dataset.centers.forEach(cArray => {
+                        if (cArray) {
+                            count += cArray.length;
+                            cArray.forEach(c => {
+                                let cx = String(c).trim();
+                                if (!centerAgg[cx]) centerAgg[cx] = {tp: 0, fp: 0, fn: 0};
+                                if (dataset.label === 'Acierto') centerAgg[cx].tp++;
+                                if (dataset.label === 'Falsa alarma') centerAgg[cx].fp++;
+                                if (dataset.label === 'No detectado') centerAgg[cx].fn++;
+                            });
+                        }
+                    });
+                } else if (!isTodos && dataset.data) {
+                    let c = String(cSelect.value).trim();
+                    if (!centerAgg[c]) centerAgg[c] = {tp: 0, fp: 0, fn: 0};
+                    dataset.data.forEach(val => {
+                        if (val !== null && val !== undefined) {
+                            count++;
+                            if (dataset.label === 'Acierto') centerAgg[c].tp++;
+                            if (dataset.label === 'Falsa alarma') centerAgg[c].fp++;
+                            if (dataset.label === 'No detectado') centerAgg[c].fn++;
+                        }
+                    });
+                }
+                if (dataset.label === 'Acierto') tpCount = count;
+                if (dataset.label === 'Falsa alarma') fpCount = count;
+                if (dataset.label === 'No detectado') fnCount = count;
+            });
+            
+            const totalFindings = tpCount + fpCount + fnCount;
+            if (totalFindings > 0) {
+                const tpPct = (tpCount / totalFindings) * 100;
+                const fpPct = (fpCount / totalFindings) * 100;
+                const fnPct = (fnCount / totalFindings) * 100;
+                let barHtml = '';
+                if (tpPct > 0) barHtml += `<div style="flex: 0 0 ${tpPct}%; min-width: 0; background: #28A745; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Centros: ${tpCount}">${tpCount > 0 && tpPct > 10 ? tpCount + ' Centros (Aciertos)' : tpCount}</div>`;
+                if (fpPct > 0) barHtml += `<div style="flex: 0 0 ${fpPct}%; min-width: 0; background: #FF7A00; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Centros: ${fpCount}">${fpCount > 0 && fpPct > 10 ? fpCount + ' Centros (Falsa alarma)' : fpCount}</div>`;
+                if (fnPct > 0) barHtml += `<div style="flex: 0 0 ${fnPct}%; min-width: 0; background: #DC3545; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Centros: ${fnCount}">${fnCount > 0 && fnPct > 10 ? fnCount + ' Centros (No detectado)' : fnCount}</div>`;
+                barContainer.innerHTML = barHtml;
+                barContainer.style.display = 'flex';
+                barContainer.style.position = 'relative';
+            } else {
+                barContainer.style.display = 'none';
+            }
+            
+            if (mapContainer && mapObjInstance && window.meta_centros) {
+                mapContainer.style.display = 'block';
+                mapObjInstance.invalidateSize();
+                mapMarkersArr.forEach(m => mapObjInstance.removeLayer(m));
+                mapMarkersArr = [];
+                
+                Object.keys(centerAgg).forEach(cx => {
+                    const agg = centerAgg[cx];
+                    const meta = window.meta_centros[cx];
+                    if (meta && meta.lat && meta.lon && (agg.tp > 0 || agg.fp > 0 || agg.fn > 0)) {
+                        let color = '#28A745';
+                        if (agg.fn > agg.tp && agg.fn > agg.fp) color = '#DC3545';
+                        else if (agg.fp > agg.tp && agg.fp >= agg.fn) color = '#FF7A00';
+                        
+                        let marker = L.circleMarker([meta.lat, meta.lon], {
+                            radius: 8,
+                            fillColor: color,
+                            color: "#fff",
+                            weight: 1.5,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).bindTooltip(`<b>${meta.name}</b><br/>${agg.tp} Aciertos, ${agg.fp} Falsas alarmas, ${agg.fn} No detectados`);
+                        marker.addTo(mapObjInstance);
+                        mapMarkersArr.push(marker);
+                    }
+                });
+                updateMarkers(mapMarkersArr);
+            }
+            
+            return;
+        }
+
+        const activeIndex = activeElements[0].index;
+        if (activeIndex === getLastHovered()) return;
+        setLastHovered(activeIndex);
+
+        const cSelect = document.getElementById('ctrl_centro');
+        const isTodos = !cSelect.value;
+        let tpCount = 0, fpCount = 0, fnCount = 0, proyCount = 0;
+
+        let drawPoints = [];
+
+        const colorPara = (label) => label === 'Acierto' ? '#28A745'
+            : label === 'Falsa alarma' ? '#FF7A00'
+            : label === 'No detectado' ? '#DC3545'
+            : label === 'Colapso proyectado' ? '#1E9FC7'
+            : '#999';
+
+        activeElements.forEach(el => {
+           const dsIndex = el.datasetIndex;
+           const dIndex = el.index;
+           if (dsIndex < 2) return; // Sólo nos interesan acierto, falsa alarma, no detectado y proyectado
+           const dataset = chart.data.datasets[dsIndex];
+
+           if (isTodos && dataset.centers && dataset.centers[dIndex]) {
+               const count = dataset.centers[dIndex].length;
+               const centers = dataset.centers[dIndex];
+               if (dataset.label === 'Acierto') tpCount = count;
+               if (dataset.label === 'Falsa alarma') fpCount = count;
+               if (dataset.label === 'No detectado') fnCount = count;
+               if (dataset.label === 'Colapso proyectado') proyCount = count;
+
+               const color = colorPara(dataset.label);
+               centers.forEach(c => {
+                   let cx = String(c).trim();
+                   if (window.meta_centros[cx] && window.meta_centros[cx].lat && window.meta_centros[cx].lon) {
+                       drawPoints.push({lat: window.meta_centros[cx].lat, lon: window.meta_centros[cx].lon, name: window.meta_centros[cx].name, color: color, type: dataset.label});
+                   }
+               });
+           } else if (!isTodos) {
+               if (dataset.label === 'Acierto') tpCount = 1;
+               if (dataset.label === 'Falsa alarma') fpCount = 1;
+               if (dataset.label === 'No detectado') fnCount = 1;
+               if (dataset.label === 'Colapso proyectado') proyCount = 1;
+
+               const color = colorPara(dataset.label);
+               let c = String(cSelect.value).trim();
+               if (window.meta_centros[c] && window.meta_centros[c].lat && window.meta_centros[c].lon) {
+                   drawPoints.push({lat: window.meta_centros[c].lat, lon: window.meta_centros[c].lon, name: window.meta_centros[c].name, color: color, type: dataset.label});
+               }
+           }
+        });
+        const totalFindings = tpCount + fpCount + fnCount + proyCount;
+        if (totalFindings > 0) {
+            const tpPct = (tpCount / totalFindings) * 100;
+            const fpPct = (fpCount / totalFindings) * 100;
+            const fnPct = (fnCount / totalFindings) * 100;
+            const proyPct = (proyCount / totalFindings) * 100;
+            let barHtml = '';
+            if (tpPct > 0) barHtml += `<div style="flex: 0 0 ${tpPct}%; min-width: 0; background: #28A745; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Aciertos: ${tpCount}">${tpCount > 0 && tpPct > 10 ? tpCount + ' Aciertos (Semana)' : tpCount}</div>`;
+            if (fpPct > 0) barHtml += `<div style="flex: 0 0 ${fpPct}%; min-width: 0; background: #FF7A00; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Falsas alarmas: ${fpCount}">${fpCount > 0 && fpPct > 10 ? fpCount + ' Falsas alarmas (Semana)' : fpCount}</div>`;
+            if (fnPct > 0) barHtml += `<div style="flex: 0 0 ${fnPct}%; min-width: 0; background: #DC3545; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="No Detectados: ${fnCount}">${fnCount > 0 && fnPct > 10 ? fnCount + ' No detectados (Semana)' : fnCount}</div>`;
+            if (proyPct > 0) barHtml += `<div style="flex: 0 0 ${proyPct}%; min-width: 0; background: #1E9FC7; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; overflow:hidden; white-space:nowrap;" title="Proyectados: ${proyCount}">${proyCount > 0 && proyPct > 10 ? proyCount + ' Proyectados (Semana)' : proyCount}</div>`;
+            barContainer.innerHTML = barHtml;
+            barContainer.style.display = 'flex';
+            barContainer.style.position = 'relative';
+            
+            if (mapContainer && mapObjInstance) {
+                const wasHidden = mapContainer.style.display === 'none';
+                mapContainer.style.display = 'block';
+                
+                const drawMap = () => {
+                    mapObjInstance.invalidateSize();
+                    
+                    mapMarkersArr.forEach(m => mapObjInstance.removeLayer(m));
+                    mapMarkersArr = [];
+                    
+                    drawPoints.forEach(pt => {
+                        let marker = L.circleMarker([pt.lat, pt.lon], {
+                            radius: 8,
+                            fillColor: pt.color,
+                            color: "#fff",
+                            weight: 1.5,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).bindTooltip(`<b>${pt.name}</b><br/>${pt.type}`);
+                        marker.addTo(mapObjInstance);
+                        mapMarkersArr.push(marker);
+                    });
+                    updateMarkers(mapMarkersArr);
+                };
+                
+                if (wasHidden) {
+                    setTimeout(drawMap, 50);
+                } else {
+                    drawMap();
+                }
+            }
+        } else {
+            barContainer.style.display = 'none';
+            if (mapContainer && window.meta_centros) {
+                mapMarkersArr.forEach(m => mapObjInstance.removeLayer(m));
+                updateMarkers([]);
+            }
+        }
+    };
+}
+
+// Initialize charts
+function initCharts() {
+  seasonPieChartObj = new Chart(document.getElementById('seasonPieChart'), {
+      type: 'doughnut',
+      data: {
+          labels: ['Otoño', 'Invierno', 'Primavera', 'Verano'],
+          datasets: [{ data: [0,0,0,0], backgroundColor: ['#FF9800', '#2196F3', '#4CAF50', '#F44336'], borderWidth: 1 }]
+      },
+      options: { plugins: { legend: { position: 'right' }, title: { display: true, text: 'Colapsos por Estación' } }, maintainAspectRatio: false }
+  });
+  
+  monthPieChartObj = new Chart(document.getElementById('monthPieChart'), {
+      type: 'doughnut',
+      data: { labels: [], datasets: [{ data: [], borderWidth: 1 }] },
+      options: { plugins: { legend: { position: 'right' }, title: { display: true, text: 'Colapsos por Mes' } }, maintainAspectRatio: false }
+  });
+
+  cmAlertasPieChartObj = new Chart(document.getElementById('cmAlertasPieChart'), {
+      type: 'doughnut',
+      data: { labels: ['Aciertos (TP)', 'Falsas Alarmas (FP)'], datasets: [{ data: [0,0], backgroundColor: ['#28A745', '#FF7A00'], borderWidth: 1 }] },
+      options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+  });
+
+  cmRealesPieChartObj = new Chart(document.getElementById('cmRealesPieChart'), {
+      type: 'doughnut',
+      data: { labels: ['Aciertos (TP)', 'No detectados (FN)'], datasets: [{ data: [0,0], backgroundColor: ['#28A745', '#DC3545'], borderWidth: 1 }] },
+      options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+  });
+
+  const shapDict = {
+    'z_rob_dyn': 'Demanda actual vs histórica robusta dinámica. Mide saturación reciente.',
+    'sem_cos': 'Estacionalidad (Coseno). Refleja el ciclo anual (invierno/verano).',
+    'sem_sin': 'Estacionalidad (Seno). Refleja el ciclo anual (otoño/primavera).',
+    'z_lag8': 'Nivel de saturación del centro hace 8 semanas.',
+    'ratio_l1_m4': 'Crecimiento: Atenciones semana anterior vs promedio últimas 4 semanas.',
+    'n_atenciones_lag1': 'Número total de atenciones la semana anterior.',
+    'n_65mas_lag1': 'Número de atenciones de adultos mayores (65+) la semana anterior.',
+    'z_lag1': 'Nivel de saturación del centro la semana anterior.',
+    'tmax': 'Temperatura máxima (impacto de calor extremo).',
+    'tmin': 'Temperatura mínima (impacto de frío).',
+    'influenza_a': 'Circulación de virus Influenza A.',
+    'vrs': 'Circulación de Virus Respiratorio Sincicial (VRS).'
+  };
+  shapChartObj = new Chart(document.getElementById('shapChart'),{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:'#009EF7',borderRadius:4}]},
+    options:{
+      indexAxis:'y',
+      plugins:{
+        legend:{display:false},
+        tooltip: {
+          callbacks: {
+            title: (context) => context[0].label,
+            label: (context) => 'Impacto relativo: ' + context.raw.toFixed(3),
+            afterLabel: (context) => {
+               const k = context.label;
+               return shapDict[k] ? [shapDict[k]] : ['Contribución de esta variable al modelo.'];
+            }
+          }
+        }
+      }
+    }
+  });
+  const drawLabelsPlugin = {
+    id: 'drawLabelsPlugin',
+    beforeDraw: (chart) => {
+      const ctx = chart.ctx;
+      const xAxis = chart.scales.x;
+      const yAxis = chart.scales.y;
+      if (!xAxis || !yAxis) return;
+      const top = yAxis.top;
+      const bottom = yAxis.bottom;
+      
+      chart.data.labels.forEach((label, i) => {
+          if (!label || !label.includes('-W')) return;
+          const w = parseInt(label.split('-W')[1], 10);
+          if (!w) return;
+          
+          let color = '';
+          if (w >= 12 && w <= 24) color = 'rgba(255, 165, 0, 0.05)'; // Otoño (naranja suave)
+          else if (w >= 25 && w <= 37) color = 'rgba(0, 123, 255, 0.05)'; // Invierno (azul suave)
+          else if (w >= 38 && w <= 50) color = 'rgba(40, 167, 69, 0.05)'; // Primavera (verde suave)
+          else color = 'rgba(220, 53, 69, 0.05)'; // Verano (rojo suave)
+          
+          const pixel = xAxis.getPixelForValue(i);
+          let prevPixel = i > 0 ? xAxis.getPixelForValue(i-1) : pixel - (xAxis.getPixelForValue(1) - pixel);
+          let nextPixel = i < chart.data.labels.length - 1 ? xAxis.getPixelForValue(i+1) : pixel + (pixel - prevPixel);
+          
+          const left = (prevPixel + pixel) / 2;
+          const right = (pixel + nextPixel) / 2;
+          
+          ctx.fillStyle = color;
+          ctx.fillRect(left, top, right - left, bottom - top);
+          
+          if (w === 12 || w === 25 || w === 38 || (w === 51 && i > 0)) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(left, top);
+              ctx.lineTo(left, bottom);
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+              ctx.setLineDash([4, 4]);
+              ctx.stroke();
+              
+              ctx.fillStyle = '#666';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'top';
+              let seasonName = w === 12 ? 'Otoño' : w === 25 ? 'Invierno' : w === 38 ? 'Primavera' : 'Verano';
+              ctx.fillText(' ' + seasonName, left, top + 5);
+              ctx.restore();
+          }
+      });
+    },
+    beforeDatasetsDraw: (chart) => {
+      if (chart.config.type !== 'line') return; // solo separar puntos en el gráfico de volumen (línea); en barras rompería la pila
+      if (chart.data.datasets.length < 4) return;
+      const ds2 = chart.data.datasets[2].data;
+      const ds3 = chart.data.datasets[3].data;
+      const meta2 = chart.getDatasetMeta(2);
+      const meta3 = chart.getDatasetMeta(3);
+      if(meta2 && meta3 && ds2 && ds3) {
+         for(let i=0; i<ds2.length; i++) {
+            if(ds2[i] !== null && ds3[i] !== null) {
+               if(meta2.data[i] && meta3.data[i]) {
+                  if (Math.abs(meta2.data[i].x - meta3.data[i].x) < 1) {
+                      meta2.data[i].x -= 12;
+                      meta3.data[i].x += 12;
+                  }
+               }
+            }
+         }
+      }
+    },
+    afterDatasetsDraw: (chart) => {
+      if (chart.data.datasets.length < 5) return;
+      if ((window.volVariant === 'oscilador' || window.volVariant === 'macro' || window.volVariant === 'apilado') && chart.canvas.id === 'volChart') return;
+      const ctx = chart.ctx;
+      const cSelect = document.getElementById('ctrl_centro');
+      const isTodos = !cSelect.value;
+      if (!isTodos) return;
+      ctx.save();
+      ctx.font = '10px Roboto, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      [2, 3, 4].forEach(dsIndex => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        if (!meta.hidden) {
+          const dataset = chart.data.datasets[dsIndex];
+          if(dataset.centers) {
+            meta.data.forEach((element, index) => {
+              const codes = dataset.centers[index];
+              if (codes && codes.length > 0) {
+                const height = Math.abs((element.base !== undefined ? element.base : (element.y + (element.height || 0))) - element.y);
+                if (height >= 12) {
+                    ctx.fillText(codes.length, element.x, element.y + (height / 2));
+                }
+              }
+            });
+          }
+        }
+      });
+      ctx.restore();
+
+      // Semanas proyectadas (dataset índice 5, "Colapso proyectado"): siempre se marca con un
+      // rótulo visible, incluso cuando el valor es 0 — una barra de altura cero es invisible y
+      // se confunde con "no se proyectó nada", cuando en realidad SÍ se calculó y dio 0 en riesgo.
+      const dsProy = chart.data.datasets[5];
+      if (chart.canvas.id === 'alertChart' && dsProy) {
+        const metaProy = chart.getDatasetMeta(5);
+        ctx.save();
+        ctx.font = 'bold 10px Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        dsProy.data.forEach((val, i) => {
+          if (val === null || val === undefined) return; // no es una semana proyectada
+          const el = metaProy.data[i];
+          if (!el) return;
+          ctx.fillStyle = '#0E8AAE';
+          ctx.fillText(String(val), el.x, el.y - 4);
+          if (val === 0) {
+            // marcador visible aun sin altura de barra: un pequeño diamante celeste
+            ctx.fillStyle = '#5BC8F5';
+            ctx.beginPath();
+            ctx.moveTo(el.x, el.y - 7);
+            ctx.lineTo(el.x - 5, el.y - 2);
+            ctx.lineTo(el.x, el.y + 3);
+            ctx.lineTo(el.x + 5, el.y - 2);
+            ctx.closePath();
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      }
+    },
+    afterDraw: (chart) => {
+      // Línea vertical roja de referencia a "hoy". Los datos nunca incluyen la semana en
+      // curso ni futuras (se descartan en el ETL por incompletitud), así que "hoy" casi
+      // siempre cae después de la última barra: se extrapola la posición asumiendo que cada
+      // categoría del eje equivale a 1 semana ISO (igual que el resto del eje).
+      const xAxis = chart.scales.x;
+      const yAxis = chart.scales.y;
+      const labels = chart.data.labels;
+      if (!xAxis || !yAxis || !labels || labels.length === 0) return;
+
+      const todayMon = isoMondayOfDate(new Date());
+      let targetPixel = null;
+
+      // 1) ¿La semana actual ya está entre las etiquetas mostradas? (p.ej. filtros distintos)
+      for (let i = 0; i < labels.length; i++) {
+        const m = /^(\d{4})-W(\d{1,2})$/.exec(String(labels[i]));
+        if (!m) continue;
+        const mon = isoWeekMonday(+m[1], +m[2]);
+        if (mon.getTime() === todayMon.getTime()) {
+          targetPixel = xAxis.getPixelForValue(i);
+          break;
+        }
+      }
+
+      // 2) Si no está: extrapolar desde la última etiqueta usando el espaciado de categorías.
+      if (targetPixel === null) {
+        const lastIdx = labels.length - 1;
+        const lastMatch = /^(\d{4})-W(\d{1,2})$/.exec(String(labels[lastIdx]));
+        if (!lastMatch) return;
+        const lastMon = isoWeekMonday(+lastMatch[1], +lastMatch[2]);
+        const weeksDiff = Math.round((todayMon - lastMon) / (7 * 24 * 3600 * 1000));
+        const spacing = labels.length > 1
+          ? xAxis.getPixelForValue(lastIdx) - xAxis.getPixelForValue(lastIdx - 1)
+          : 0;
+        targetPixel = xAxis.getPixelForValue(lastIdx) + spacing * weeksDiff;
+      }
+
+      const left = chart.chartArea.left;
+      const right = chart.chartArea.right;
+      if (targetPixel < left || targetPixel > right) return; // fuera del área visible: no dibujar
+
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(targetPixel, yAxis.top);
+      ctx.lineTo(targetPixel, yAxis.bottom);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#DC3545';
+      ctx.setLineDash([]);
+      ctx.stroke();
+
+      ctx.fillStyle = '#DC3545';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('Hoy', targetPixel, yAxis.top - 2);
+      ctx.restore();
+    }
+  };
+
+
+
+  alertChartObj = new Chart(document.getElementById('alertChart'),{type:'bar',data:{labels:[],datasets:[
+    {label:'Colapsos reales',data:[],hidden:true},
+    {label:'Alertas predichas',data:[],hidden:true},
+    {label:'Acierto',data:[],backgroundColor:'#28A745',stack:'Stack 0',borderRadius:2,borderSkipped:false},
+    {label:'Falsa alarma',data:[],backgroundColor:'#FF7A00',stack:'Stack 0',borderRadius:2,borderSkipped:false},
+    {label:'No detectado',data:[],backgroundColor:'#DC3545',stack:'Stack 0',borderRadius:2,borderSkipped:false},
+    {label:'Colapso proyectado',data:[],backgroundColor:'#5BC8F5',stack:'Stack 0',borderRadius:2,borderSkipped:false}
+  ]},
+    plugins: [drawLabelsPlugin],
+    options:{
+      onHover: createHoverHandler(
+          'alert-chart-stacked-bar-container', 'alert-map',
+          () => ({ mapObjInstance: alertMapObj, mapMarkersArr: alertMapMarkers }),
+          (m) => alertMapMarkers = m,
+          () => lastHoveredIndexAlert,
+          (v) => lastHoveredIndexAlert = v
+      ),
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins:{
+        legend:{
+          position:'top',
+          labels:{
+            usePointStyle:true,
+            pointStyle:'rectRounded',
+            boxWidth:14,
+            padding:16,
+            font:{size:12},
+            generateLabels:(chart)=>{
+              const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              const rename = {'Acierto':'✔ Alerta correcta','Falsa alarma':'⚠ Falsa alarma','No detectado':'✘ Colapso no detectado','Colapso proyectado':'◆ Colapso proyectado'};
+              return items.filter(it=>!it.hidden).map(it=>{ if(rename[it.text]) it.text=rename[it.text]; return it; });
+            }
+          }
+        },
+        tooltip: {
+          events: ['click'],
+          enabled: false,
+          external: customTooltip
+        }
+      },
+      scales:{y:{beginAtZero:true, stacked:true, title:{display:true,text:'Nº de centros en alerta'}, ticks:{callback:(v)=>v}, grid:{color:'rgba(0,0,0,0.05)'}},x:{stacked:true, ticks:{autoSkip:false, maxRotation:0, minRotation:0, font:{size:9}, callback:function(v){return isoWeekTick(this.getLabelForValue(v));}}, grid:{display:false}}}
+    }
+  });
+  
+  document.getElementById('alertChart').addEventListener('mouseleave', (e) => {
+    if (e.relatedTarget && (e.relatedTarget.id === 'chartjs-custom-tooltip' || e.relatedTarget.closest('#chartjs-custom-tooltip'))) return;
+    if (alertChartObj && alertChartObj.options.onHover) {
+      alertChartObj.setActiveElements([]);
+      if (alertChartObj.tooltip) alertChartObj.tooltip.setActiveElements([], {x: 0, y: 0});
+      alertChartObj.update();
+      alertChartObj.options.onHover(new Event('mouseleave'), [], alertChartObj);
+    }
+  });
+
+  document.getElementById('alert_pct_toggle').addEventListener('change', applyAlertMode);
+
+  volChartObj = new Chart(document.getElementById('volChart'),{type:'line',data:{labels:[],datasets:[
+    {label:'Volumen real',data:[],borderColor:'#09567B',backgroundColor:'#09567B',borderWidth:2.5,tension:.3,pointRadius:0},
+    {label:'Umbral de colapso',data:[],borderColor:'#aaa',borderWidth:2,borderDash:[2,2],tension:.3,pointRadius:0},
+    {label:'Acierto',data:[],backgroundColor:'#28A745',type:'scatter',pointRadius:10,hoverRadius:12},
+    {label:'Falsa alarma',data:[],backgroundColor:'#FF7A00',type:'scatter',pointRadius:10,hoverRadius:12},
+    {label:'No detectado',data:[],backgroundColor:'#DC3545',type:'scatter',pointRadius:10,hoverRadius:12}
+  ]},
+    plugins: [drawLabelsPlugin],
+    options:{
+      onHover: createHoverHandler(
+          'chart-stacked-bar-container', 'map',
+          () => ({ mapObjInstance: mapObj, mapMarkersArr: mapMarkers }),
+          (m) => mapMarkers = m,
+          () => lastHoveredIndexVol,
+          (v) => lastHoveredIndexVol = v
+      ),
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip: {
+          events: ['click'],
+          enabled: false,
+          external: customTooltip
+        }
+      },
+      scales:{y:{beginAtZero:true, stacked:false},x:{stacked:false, ticks:{autoSkip:false, maxRotation:0, minRotation:0, font:{size:9}, callback:function(v){return isoWeekTick(this.getLabelForValue(v));}}}}
+    }
+  });
+  
+  document.getElementById('volChart').addEventListener('mouseleave', (e) => {
+    if (e.relatedTarget && (e.relatedTarget.id === 'chartjs-custom-tooltip' || e.relatedTarget.closest('#chartjs-custom-tooltip'))) return;
+    if (volChartObj && volChartObj.options.onHover) {
+      volChartObj.setActiveElements([]);
+      if (volChartObj.tooltip) volChartObj.tooltip.setActiveElements([], {x: 0, y: 0});
+      volChartObj.update();
+      volChartObj.options.onHover(new Event('mouseleave'), [], volChartObj);
+    }
+  });
+}
+
+async function loadMeta() {
+  const res = await fetch('/api/meta?t=' + new Date().getTime(), { credentials: 'same-origin' });
+  const data = await res.json();
+  const select = document.getElementById('ctrl_centro');
+  window.meta_centros = {};
+  data.centros.forEach(c => {
+    let opt = document.createElement('option');
+    opt.value = c.code; opt.textContent = c.name;
+    select.appendChild(opt);
+    window.meta_centros[c.code] = c;
+  });
+  
+  if (!mapObj) {
+      mapObj = L.map('map').setView([-33.45, -70.66], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19
+      }).addTo(mapObj);
+  }
+  
+  if (!alertMapObj) {
+      alertMapObj = L.map('alert-map').setView([-33.45, -70.66], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19
+      }).addTo(alertMapObj);
+  }
+  
+  if (data.grid) {
+      window.gridData = data.grid;
+      document.getElementById('best-auc').textContent = data.grid.best.pr_auc.toFixed(3);
+      document.getElementById('worst-auc').textContent = data.grid.worst.pr_auc.toFixed(3);
+      
+      const b = data.grid.best.conf;
+      document.getElementById('best-conf').innerHTML = `Tipo: ${b.tipo}, Ventana: ${b.ventana}, k: ${b.k} | Clima: ${b.clima?"Sí":"No"}, Red: ${b.red?"Sí":"No"}, Viral: ${b.viral?"Sí":"No"}, Rob: ${b.zrob?"Sí":"No"}`;
+      
+      const w = data.grid.worst.conf;
+      document.getElementById('worst-conf').innerHTML = `Tipo: ${w.tipo}, Ventana: ${w.ventana}, k: ${w.k} | Clima: ${w.clima?"Sí":"No"}, Red: ${w.red?"Sí":"No"}, Viral: ${w.viral?"Sí":"No"}, Rob: ${w.zrob?"Sí":"No"}`;
+  }
+
+  if (data.cobertura_reciente) {
+    const cont = document.getElementById('cobertura-reciente-list');
+    cont.innerHTML = '';
+    if (data.cobertura_reciente.length === 0) {
+      cont.innerHTML = '<span style="color:var(--mut);">Sin semanas recientes para diagnosticar.</span>';
+    }
+    data.cobertura_reciente.forEach(w => {
+      const mon = isoWeekMonday(w.anio, w.semana);
+      const dom = new Date(mon); dom.setUTCDate(mon.getUTCDate() + 6);
+      const color = w.estado === 'ok' ? 'var(--ok)' : w.estado === 'precaucion' ? 'var(--warn)' : w.estado === 'alerta' ? 'var(--crit)' : '#999';
+      const pctTxt = w.ratio_pct != null ? w.ratio_pct.toFixed(0) + '%' : 'sin referencia';
+      const normalTxt = w.normal_estimado != null ? w.normal_estimado : '--';
+      cont.innerHTML += `<div style="border-left:3px solid ${color};padding-left:.5rem;">
+        <div style="color:var(--dark);">S${w.semana}/${w.anio} (${fmtDia(mon)} - ${fmtDia(dom)})</div>
+        <div style="color:var(--mut);">Real: <strong>${w.real}</strong> · Normal esperado: <strong>${normalTxt}</strong> · <span style="color:${color};font-weight:700;">${pctTxt}</span></div>
+        <label class="toggle" style="font-weight:400;font-size:.74rem;margin-top:.15rem;">
+          <input type="checkbox" class="chk-semana-estimar" data-anio="${w.anio}" data-semana="${w.semana}" checked>
+          Usar dato reportado tal cual
+        </label>
+      </div>`;
+    });
+    document.querySelectorAll('.chk-semana-estimar').forEach(cb => {
+      cb.addEventListener('change', fetchState);
+    });
+  }
+}
+
+function applyGridConfig(type, specificConf=null) {
+    if (!window.gridData) return;
+    const conf = specificConf ? specificConf : (type === 'best' ? window.gridData.best.conf : window.gridData.worst.conf);
+    
+    document.getElementById('ctrl_tipo').value = conf.tipo;
+    document.getElementById('ctrl_ventana').value = conf.ventana.toString();
+    
+    let kStr = conf.k.toString();
+    if (kStr.indexOf('.') === -1) kStr += '.0';
+    document.getElementById('ctrl_k').value = kStr;
+    
+    if (conf.severidad !== undefined) {
+        document.getElementById('ctrl_severidad').value = (conf.severidad * 100).toString();
+        document.getElementById('sevVal').textContent = (conf.severidad * 100).toString();
+    }
+    
+    document.getElementById('ctrl_f_clima').checked = conf.clima;
+    document.getElementById('ctrl_f_red').checked = conf.red;
+    document.getElementById('ctrl_f_viral').checked = conf.viral;
+    document.getElementById('ctrl_f_zrob').checked = conf.zrob;
+    
+    switchTab('simulador');
+    fetchState();
+}
+
+const TAB_IDS = ['simulador', 'comparativa', 'evolucion', 'configia'];
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.style.fontWeight = '500';
+        b.style.color = 'var(--light)';
+        b.style.borderBottomColor = 'transparent';
+    });
+    let activeBtn = document.getElementById('btn-tab-' + tabId);
+    activeBtn.style.fontWeight = 'bold';
+    activeBtn.style.color = '#fff';
+    activeBtn.style.borderBottomColor = 'var(--blue)';
+
+    TAB_IDS.forEach(id => {
+        document.getElementById('view-' + id).style.display = (id === tabId) ? 'block' : 'none';
+    });
+    document.body.style.paddingLeft = (tabId === 'simulador') ? '250px' : '0px';
+
+    if (tabId === 'comparativa') {
+        renderComparativa();
+    } else if (tabId === 'evolucion') {
+        renderEvolucion();
+    } else if (tabId === 'configia') {
+        loadPromptConfig();
+    }
+}
+
+function renderComparativa() {
+    if(!window.gridData || !window.gridData.all) return;
+    const fTipo = document.getElementById('comp-tipo').value;
+    const fSev = document.getElementById('comp-sev').value;
+    const fVent = document.getElementById('comp-ventana').value;
+    
+    let filtered = window.gridData.all.filter(row => {
+        if (fTipo && row.conf.tipo !== fTipo) return false;
+        if (fSev && row.conf.severidad.toString() !== fSev) return false;
+        if (fVent && row.conf.ventana.toString() !== fVent) return false;
+        return true;
+    });
+    
+    // Sort by PR-AUC desc
+    filtered.sort((a,b) => b.pr_auc - a.pr_auc);
+    
+    // Top 20 max to avoid DOM freeze
+    const top = filtered.slice(0, 20);
+    
+    const bColor = val => val ? '<span class="badge b-ok">Sí</span>' : '<span class="badge" style="background:#ccc;">No</span>';
+    const numFmt = val => (val*100).toFixed(1)+'%';
+    const btn = (conf) => `<button onclick='applyGridConfig("custom", ${JSON.stringify(conf)})' style="background:var(--blue);color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">Aplicar</button>`;
+    
+    document.getElementById('comp-tbody').innerHTML = top.map(r => `
+      <tr>
+        <td><strong>${r.conf.tipo}</strong></td>
+        <td>${r.conf.ventana}</td>
+        <td>${r.conf.k.toFixed(1)}</td>
+        <td>${r.conf.severidad !== undefined ? (r.conf.severidad*100).toFixed(0)+'%' : '--'}</td>
+        <td>${bColor(r.conf.clima)}</td>
+        <td>${bColor(r.conf.red)}</td>
+        <td>${bColor(r.conf.viral)}</td>
+        <td>${bColor(r.conf.zrob)}</td>
+        <td style="font-weight:bold;color:var(--dark);">${r.pr_auc.toFixed(3)}</td>
+        <td>${numFmt(r.recall)}</td>
+        <td>${numFmt(r.precision)}</td>
+        <td>${btn(r.conf)}</td>
+      </tr>
+    `).join('');
+}
+
+// Datos fijos extraídos de notebooks/historico/log_ejecuciones.md (bitácora de ejecuciones).
+const EVO_DATA = [
+  {v:'v1 Baseline', modelo:'LogReg Lasso', prauc:0.318, prec:null, rec:null, f1:0.450, nota:'Regresión lineal, sin features avanzadas — campeón provisional inicial', role:'normal'},
+  {v:'v2 XGBoost', modelo:'XGBoost (pesos balanceados)', prauc:0.208, prec:null, rec:null, f1:0.271, nota:'Peor que el baseline: problema casi lineal (ola viral), XGBoost sobreajusta — descartado', role:'bad'},
+  {v:'v3 Features+Precisión', modelo:'LogReg Lasso', prauc:0.427, prec:0.359, rec:0.815, f1:0.499, nota:'Features sin fuga: z-score de calor reciente, momentum, estacionalidad seno/coseno', role:'normal'},
+  {v:'v4 XGBoost Reloaded', modelo:'XGBoost (md=3)', prauc:0.522, prec:0.415, rec:0.815, f1:0.550, nota:'XGBoost retoma con features de v3; baja falsas alarmas de 1220 a 962', role:'normal'},
+  {v:'v5 Precisión', modelo:'XGBoost', prauc:0.547, prec:0.410, rec:0.801, f1:0.542, nota:'Aceleración relativa + z-score amortiguado por tamaño del centro', role:'normal'},
+  {v:'v7 Espacial', modelo:'XGBoost (presión de red)', prauc:0.607, prec:0.424, rec:0.830, f1:0.562, nota:'Presión espacial (comuna/servicio de salud) — mayor salto de PR-AUC hasta ese punto', role:'normal'},
+  {v:'v8 Robusto', modelo:'XGBoost (target robusto)', prauc:0.770, prec:0.523, rec:0.828, f1:0.641, nota:'Target mediana+MAD robusto (8 sem) — CAMPEÓN OPERATIVO del simulador', role:'champion'},
+  {v:'v9 / V2 Aum. Estándar', modelo:'XGBoost', prauc:0.842, prec:0.568, rec:0.830, f1:0.674, nota:'Target = +15% sobre el techo histórico del centro (menos fatiga de alertas)', role:'normal'},
+  {v:'v10 / V3 Aum. Reciente', modelo:'XGBoost', prauc:0.763, prec:0.578, rec:0.830, f1:0.681, nota:'Target = +15% sobre mediana móvil de 4 semanas (umbral sigue la curva real)', role:'normal'},
+  {v:'v11 / V4 Estacional', modelo:'XGBoost', prauc:0.685, prec:0.495, rec:0.830, f1:0.620, nota:'Target = climatología por semana del año, corregida por el año en curso', role:'normal'},
+];
+const EVO_CANDIDATES = [
+  {label:'V1 Robusto', prauc:0.770, prec:0.523, rec:0.828},
+  {label:'V2 Aum. Estándar', prauc:0.842, prec:0.568, rec:0.830},
+  {label:'V3 Aum. Reciente', prauc:0.763, prec:0.578, rec:0.830},
+  {label:'V4 Estacional', prauc:0.685, prec:0.495, rec:0.830},
+];
+let lineageChartObj, candidatesChartObj, evolucionRendered = false;
+
+function renderEvolucion() {
+    if (evolucionRendered) return;
+    evolucionRendered = true;
+
+    const roleColor = r => r === 'champion' ? '#00A878' : (r === 'bad' ? '#DC3545' : '#009EF7');
+    lineageChartObj = new Chart(document.getElementById('lineageChart'), {
+        type: 'bar',
+        data: { labels: EVO_DATA.map(d => d.v), datasets: [{
+            label: 'PR-AUC', data: EVO_DATA.map(d => d.prauc),
+            backgroundColor: EVO_DATA.map(d => roleColor(d.role)), borderRadius: 4
+        }]},
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => 'PR-AUC: ' + ctx.parsed.y.toFixed(3) } }
+            },
+            scales: { y: { beginAtZero: true, max: 1, ticks: { callback: v => v.toFixed(1) } },
+                      x: { ticks: { autoSkip: false, maxRotation: 35, minRotation: 35, font: { size: 10 } } } }
+        }
+    });
+
+    candidatesChartObj = new Chart(document.getElementById('candidatesChart'), {
+        type: 'bar',
+        data: { labels: EVO_CANDIDATES.map(d => d.label), datasets: [
+            { label: 'PR-AUC', data: EVO_CANDIDATES.map(d => d.prauc), backgroundColor: '#FF338D', borderRadius: 4 },
+            { label: 'Precisión', data: EVO_CANDIDATES.map(d => d.prec), backgroundColor: '#FF7A00', borderRadius: 4 },
+            { label: 'Recall', data: EVO_CANDIDATES.map(d => d.rec), backgroundColor: '#00A878', borderRadius: 4 }
+        ]},
+        options: {
+            plugins: { legend: { position: 'top' } },
+            scales: { y: { beginAtZero: true, max: 1, ticks: { callback: v => (v*100).toFixed(0)+'%' } } }
+        }
+    });
+
+    const roleBadge = r => r === 'champion' ? '<span class="badge b-ok">★ Campeón</span>' : (r === 'bad' ? '<span class="badge b-crit">Descartado</span>' : '');
+    document.getElementById('evo-tbody').innerHTML = EVO_DATA.map(d => `
+      <tr>
+        <td><strong>${d.v}</strong><br>${roleBadge(d.role)}</td>
+        <td>${d.modelo}</td>
+        <td style="text-align:right;font-weight:600">${d.prauc.toFixed(3)}</td>
+        <td style="text-align:right">${d.prec !== null ? (d.prec*100).toFixed(1)+'%' : '—'}</td>
+        <td style="text-align:right">${d.rec !== null ? (d.rec*100).toFixed(1)+'%' : '—'}</td>
+        <td style="text-align:right">${d.f1.toFixed(3)}</td>
+        <td style="font-size:.82rem;color:#555">${d.nota}</td>
+      </tr>
+    `).join('');
+}
+
+function applyAlertMode(){
+  if(!alertChartObj || !alertChartObj._rawAlert) return;
+  const raw = alertChartObj._rawAlert;
+  const toggle = document.getElementById('alert_pct_toggle');
+  const pct = !!(toggle && toggle.checked);
+  const n = (raw.tp || []).length;
+  const tp=[], fp=[], fn=[];
+  for(let i=0;i<n;i++){
+    const a=raw.tp[i], b=raw.fp[i], c=raw.fn[i];
+    if(pct){
+      const tot=(a||0)+(b||0)+(c||0);
+      tp.push(a==null?null:(tot? a/tot*100 : 0));
+      fp.push(b==null?null:(tot? b/tot*100 : 0));
+      fn.push(c==null?null:(tot? c/tot*100 : 0));
+    } else { tp.push(a); fp.push(b); fn.push(c); }
+  }
+  alertChartObj.data.datasets[2].data = tp;
+  alertChartObj.data.datasets[3].data = fp;
+  alertChartObj.data.datasets[4].data = fn;
+  const y = alertChartObj.options.scales.y;
+  y.max = pct ? 100 : undefined;
+  y.title.text = pct ? '% de resultados por semana' : 'Nº de centros en alerta';
+  y.ticks.callback = pct ? (v)=>v+'%' : (v)=>v;
+  alertChartObj.update();
+}
+
+function updateDashboard(data) {
+  if(data.error) { alert(data.error); return; }
+  const kpis = data.kpis;
+
+  // Actualizar panel de pronóstico futuro (incluye T+1 y, si el usuario desmarcó "usar
+  // datos tal cual", las semanas retroactivas estimadas por rezago de reporte)
+  const fut_container = document.getElementById('alert-futura-container');
+  const fut_blocks = document.getElementById('pronostico-futuro-blocks');
+  fut_blocks.innerHTML = '';
+  // Se muestran SIEMPRE todos los bloques (incluido el pronóstico T+1 aunque tenga 0
+  // centros en riesgo) — un banner ausente es ambiguo (¿no corrió, o de verdad no hay
+  // riesgo?), y en un sistema de alerta TEMPRANA la confirmación explícita de "sin riesgo
+  // esta semana" es tan importante como la alerta misma.
+  const bloques = data.pronostico_futuro || [];
+  if (bloques.length > 0) {
+      const hayRiesgo = bloques.some(b => b.alertas && b.alertas.length > 0);
+      fut_container.style.background = hayRiesgo ? 'rgba(220, 53, 69, 0.1)' : 'rgba(0, 168, 120, 0.08)';
+      fut_container.style.borderColor = hayRiesgo ? 'var(--crit)' : 'var(--ok)';
+      bloques.forEach(b => {
+          const esRetro = b.tipo === 'estimado_retroactivo';
+          const sinRiesgo = !b.alertas || b.alertas.length === 0;
+          const rango = fmtRangoSemana(b.anio, b.semana);
+          const tituloBase = esRetro
+              ? `ESTIMACIÓN ${rango} (dato reportado incompleto)`
+              : `PRONÓSTICO SEMANA EN CURSO (${rango})`;
+          const color = sinRiesgo ? 'var(--ok)' : (esRetro ? 'var(--orange)' : 'var(--crit)');
+          const icono = sinRiesgo ? '🟢' : (esRetro ? '🟠' : '🔴');
+          const cuerpo = sinRiesgo
+              ? `<div style="color:var(--dark); font-size:0.85rem;">✔ Ningún centro cruza el umbral de riesgo con la configuración actual.</div>`
+              : `<div style="display:flex; flex-wrap:wrap; gap:0.5rem;">${b.alertas.map(a => {
+                  const c_name = window.meta_centros && window.meta_centros[a.centro] ? window.meta_centros[a.centro].name : a.centro;
+                  const chipColor = a.prob > 0.8 ? "var(--crit)" : (a.prob > 0.6 ? "var(--orange)" : "var(--warn)");
+                  return `<div style="background:#fff; border-left:4px solid ${chipColor}; padding:0.4rem 0.8rem; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,0.1); font-size:0.85rem; font-weight:600; color:var(--dark);">${c_name} <span style="color:#666; font-weight:normal;">(${(a.prob*100).toFixed(0)}%)</span></div>`;
+                }).join('')}</div>`;
+          fut_blocks.innerHTML += `<div style="margin-bottom:1rem;">
+            <h3 style="color:${color}; margin-top:0; display:flex; align-items:center; gap:0.5rem;"><span>${icono}</span> ${tituloBase}</h3>
+            ${cuerpo}
+          </div>`;
+      });
+      fut_container.style.display = 'block';
+  } else {
+      fut_container.style.display = 'none';
+  }
+  
+  const kpi_html = `
+   <div class="kpi" style="border-top-color:var(--green)">
+     <div class="t">Sensibilidad (Recall)</div>
+     <div class="v">${(kpis.recall*100).toFixed(1)}%</div>
+     <div class="s">Detecta ${kpis.TP} de ${kpis.TP+kpis.FN} colapsos reales</div>
+     <div style="margin-top:8px; font-size:11px; color:#666; line-height:1.2;">De todos los colapsos que realmente ocurrieron, qué porcentaje logró detectar el modelo.</div>
+   </div>
+   <div class="kpi" style="border-top-color:var(--orange)">
+     <div class="t">Precisión de las alertas</div>
+     <div class="v">${(kpis.precision*100).toFixed(1)}%</div>
+     <div class="s"><span class="badge b-crit">~${Math.round((1-kpis.precision)*100)}% falsas alarmas</span></div>
+     <div style="margin-top:8px; font-size:11px; color:#666; line-height:1.2;">Cuando el modelo enciende una alerta, qué tan probable es que sea un colapso real y no una falsa alarma.</div>
+   </div>
+   <div class="kpi" style="border-top-color:var(--pink)">
+     <div class="t">PR-AUC y F1</div>
+     <div class="v">${kpis.pr_auc.toFixed(3)}</div>
+     <div class="s">F1: ${kpis.f1.toFixed(3)}</div>
+     <div style="margin-top:8px; font-size:11px; color:#666; line-height:1.2;">Métricas globales (0 a 1). <strong>PR-AUC</strong> mide el equilibrio general entre detectar colapsos y evitar falsas alarmas. <strong>F1</strong> es la media armónica entre precisión y sensibilidad.</div>
+   </div>
+  `;
+  document.getElementById('kpis_dinamicos').innerHTML = kpi_html;
+  
+  cmAlertasPieChartObj.data.datasets[0].data = [kpis.TP, kpis.FP];
+  cmAlertasPieChartObj.update();
+  
+  cmRealesPieChartObj.data.datasets[0].data = [kpis.TP, kpis.FN];
+  cmRealesPieChartObj.update();
+
+
+
+  // Detalle numérico por centro/semana (para el hover "¿por qué se definió así su umbral?")
+  window.detalleCentros = data.volume.detalle || [];
+  window.ventanaActual = data.ventana || null;
+  window.umbralProbActual = (typeof data.umbral_prob === 'number') ? data.umbral_prob : null;
+
+  // Update charts
+  shapChartObj.data.labels = data.shap_top.labels;
+  shapChartObj.data.datasets[0].data = data.shap_top.values;
+  shapChartObj.update();
+  
+  // Semanas proyectadas (retroactivas estimadas + la semana en curso, T+1) se agregan como
+  // columnas extra al final del mismo gráfico, en celeste — sin desglose acierto/falsa
+  // alarma/no detectado porque todavía no existe un dato real con qué compararlas.
+  const nReal = data.alertas_semana.labels.length;
+  const proy = data.pronostico_futuro || [];
+  const proyLabels = proy.map(b => `${b.anio}-W${String(b.semana).padStart(2,'0')}`);
+  const proyCounts = proy.map(b => (b.alertas || []).length);
+  const nullsProy = proyLabels.map(() => null);
+
+  alertChartObj.data.labels = data.alertas_semana.labels.concat(proyLabels);
+  alertChartObj.data.datasets[0].data = data.alertas_semana.real.concat(nullsProy);
+  alertChartObj.data.datasets[1].data = data.alertas_semana.pred.concat(nullsProy);
+  alertChartObj._rawAlert = {
+    tp: data.alertas_semana.tp.concat(nullsProy),
+    fp: data.alertas_semana.fp.concat(nullsProy),
+    fn: data.alertas_semana.fn.concat(nullsProy)
+  };
+  alertChartObj.data.datasets[5].data = new Array(nReal).fill(null).concat(proyCounts);
+  alertChartObj.data.datasets[5].centers = new Array(nReal).fill(null).concat(proy.map(b => (b.alertas || []).map(a => a.centro)));
+  if(data.volume.tp_centers) alertChartObj.data.datasets[2].centers = data.volume.tp_centers;
+  if(data.volume.fp_centers) alertChartObj.data.datasets[3].centers = data.volume.fp_centers;
+  if(data.volume.fn_centers) alertChartObj.data.datasets[4].centers = data.volume.fn_centers;
+  applyAlertMode();
+  
+  if (alertChartObj.options.onHover) {
+      alertChartObj.options.onHover(null, [], alertChartObj);
+  }
+  
+  window.lastDataVol = data.volume;
+  updateVolChartData(data.volume);
+  renderHeatmap(data);
+  updateDistributionCharts(data);
+  
+  if (volChartObj.options.onHover) {
+      volChartObj.options.onHover(null, [], volChartObj);
+  }
+}
+
+async function actualizarDatos() {
+  if (!confirm('¿Actualizar datos ahora? Descarga datos frescos desde las fuentes oficiales (DEIS/OMS) y puede tardar unos segundos.')) return;
+
+  const btn = document.getElementById('btn-actualizar-datos');
+  const status = document.getElementById('lbl-actualizar-status');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  status.textContent = 'Actualizando... esto puede tardar unos segundos';
+
+  try {
+    const res = await fetch('/api/actualizar_datos', { method: 'POST', credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert('No se pudo actualizar: ' + (data.detail || res.statusText));
+      return;
+    }
+    document.getElementById('lbl-ultima-actualizacion').textContent = data.texto;
+    status.textContent = '✔ Actualizado';
+    await loadMeta();   // refresca centros, cobertura reciente, grid, etc.
+    await fetchState(); // refresca gráficos/predicciones con el dato nuevo
+    setTimeout(() => { status.textContent = ''; }, 4000);
+  } catch (e) {
+    alert('Error de conexión al actualizar los datos.');
+    status.textContent = '';
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+let __fetchSeq = 0;
+async function fetchState() {
+  document.getElementById('overlay').style.display = 'flex';
+  const mySeq = ++__fetchSeq; // descarta la respuesta si llega otra petición más nueva antes
+
+  const cSelect = document.getElementById('ctrl_centro');
+  const cName = cSelect.value ? cSelect.options[cSelect.selectedIndex].text : "Todos";
+  document.getElementById('main-title').textContent = `Alerta Temprana de Sobrecarga Localizada (Vivo) - ${cName}`;
+
+  const tipoSelect = document.getElementById('ctrl_tipo');
+  if (tipoSelect) {
+    const lblHeader = document.getElementById('lbl-modelo-header');
+    if (lblHeader) {
+      const optionText = tipoSelect.options[tipoSelect.selectedIndex].text;
+      lblHeader.textContent = `XGBoost Interactivo - ${optionText}`;
+    }
+  }
+
+  const req = {
+    target: {
+      tipo: document.getElementById('ctrl_tipo').value,
+      ventana: parseInt(document.getElementById('ctrl_ventana').value),
+      k: parseFloat(document.getElementById('ctrl_k').value),
+      severidad: parseFloat(document.getElementById('ctrl_severidad').value)/100.0
+    },
+    features: {
+      clima: document.getElementById('ctrl_f_clima').checked,
+      red: document.getElementById('ctrl_f_red').checked,
+      viral: document.getElementById('ctrl_f_viral').checked,
+      z_rob8: document.getElementById('ctrl_f_zrob').checked
+    },
+    filtro: {
+      centro: document.getElementById('ctrl_centro').value || null
+    },
+    recall_objetivo: parseFloat(document.getElementById('opSlider').value),
+    train_years: Array.from(document.querySelectorAll('input[name="train_year"]:checked')).map(cb => parseInt(cb.value)),
+    test_years: Array.from(document.querySelectorAll('input[name="test_year"]:checked')).map(cb => parseInt(cb.value)),
+    semanas_estimar: Array.from(document.querySelectorAll('.chk-semana-estimar:not(:checked)')).map(cb => ({
+      anio: parseInt(cb.dataset.anio), semana: parseInt(cb.dataset.semana)
+    }))
+  };
+  
+  try {
+    const res = await fetch('/api/evaluar', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(req)
+    });
+    const data = await res.json();
+    if (mySeq !== __fetchSeq) return; // ya hay una petición más nueva en vuelo: ignorar esta respuesta obsoleta
+    updateDashboard(data);
+  } catch(e) {
+    alert("Error conectando a la API");
+  } finally {
+    if (mySeq === __fetchSeq) document.getElementById('overlay').style.display = 'none';
+  }
+}
+
+const controls = ['ctrl_tipo', 'ctrl_ventana', 'ctrl_k', 'ctrl_severidad', 'ctrl_f_clima', 'ctrl_f_red', 'ctrl_f_viral', 'ctrl_f_zrob', 'ctrl_centro'];
+controls.forEach(id => {
+  document.getElementById(id).addEventListener('change', fetchState);
+});
+
+document.querySelectorAll('input[name="train_year"], input[name="test_year"]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    if (document.querySelectorAll('input[name="train_year"]:checked').length === 0) { cb.checked = true; return; }
+    if (document.querySelectorAll('input[name="test_year"]:checked').length === 0) { cb.checked = true; return; }
+    fetchState();
+  });
+});
+
+document.getElementById('opSlider').addEventListener('input', (e) => {
+    document.getElementById('opR').textContent = e.target.value;
+});
+document.getElementById('opSlider').addEventListener('change', fetchState);
+document.getElementById('ctrl_severidad').addEventListener('input', (e) => {
+    document.getElementById('sevVal').textContent = e.target.value;
+});
+
+initCharts();
+setVolVariant('macro');
+// Default operativo: nivel · ventana 12 · k 1.5 · red+robusto (viral off) — colapsos significativos
+// (evita el sesgo de prevalencia del k=1.0 "mejor combo"). El banner sigue mostrando la mejor combo
+// del grid, y se puede aplicar con un clic.
+loadMeta().then(() => fetchState());
+
+let currentPromptDefault = "Eres un asistente experto del proyecto de alerta temprana de sobrecarga logística. Respondes preguntas a usuarios no técnicos de forma clara y directa en español.\n**Reglas estrictas:**\n1. NUNCA inventes cifras. Usa las herramientas proporcionadas para extraer información del modelo y de los datos en curso.\n2. Si te preguntan sobre conclusiones metodológicas (ej. ablación climática), usa la herramienta de búsqueda documental.\n3. Si no tienes datos en las herramientas para respaldar la respuesta, admite explícitamente que no posees esa información.\n4. Explica el concepto de 'colapso' (alta demanda) como un aumento relativo en el propio centro, no con términos estadísticos.";
+
+function updatePromptLength() {
+    const text = document.getElementById('prompt-editor').value || '';
+    document.getElementById('prompt-length').innerText = text.length + " caracteres";
+}
+
+function restoreDefaultPrompt() {
+    if (confirm("¿Seguro que deseas cargar el prompt por defecto? Tendrás que presionar 'Guardar' para aplicarlo.")) {
+        document.getElementById('prompt-editor').value = currentPromptDefault;
+        updatePromptLength();
+    }
+}
+
+async function loadPromptConfig() {
+    try {
+        const res = await fetch('/api/chat/prompt', { credentials: 'same-origin' });
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('prompt-editor').value = data.prompt_actual;
+            updatePromptLength();
+            
+            let htmlHist = '';
+            if (data.historial && data.historial.length > 0) {
+                data.historial.forEach(v => {
+                    const d = new Date(v.fecha);
+                    const promptEscaped = encodeURIComponent(v.prompt);
+                    htmlHist += `
+                    <div style="border: 1px solid #e2e8f0; padding: 0.75rem; border-radius: 6px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'" onclick="cargarVersionAntigua('${promptEscaped}')">
+                        <div style="font-size: 0.85rem; font-weight: bold; color: #334155; margin-bottom: 0.25rem;">${d.toLocaleDateString()} ${d.toLocaleTimeString()}</div>
+                        <div style="font-size: 0.75rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${v.prompt.substring(0, 50).replace(/</g, "&lt;")}...</div>
+                    </div>`;
+                });
+                document.getElementById('historial-versiones-list').innerHTML = htmlHist;
+            } else {
+                document.getElementById('historial-versiones-list').innerHTML = '<div style="color: #94a3b8; font-size: 0.9rem;">Aún no hay versiones guardadas.</div>';
+            }
+            document.getElementById('badge-prompt-status').innerText = 'Prompt Activo';
+        } else {
+            document.getElementById('badge-prompt-status').innerText = 'Error ' + res.status;
+        }
+    } catch (e) {
+        console.error(e);
+        document.getElementById('badge-prompt-status').innerText = 'Error al cargar';
+    }
+}
+
+function cargarVersionAntigua(promptEncoded) {
+    if (confirm("¿Cargar esta versión antigua en el editor?")) {
+        document.getElementById('prompt-editor').value = decodeURIComponent(promptEncoded);
+        updatePromptLength();
+    }
+}
+
+async function savePromptConfig() {
+    const btn = document.getElementById('btn-guardar-prompt');
+    const oldText = btn.innerText;
+    btn.innerText = "Guardando...";
+    btn.disabled = true;
+    try {
+        const newPrompt = document.getElementById('prompt-editor').value;
+        const res = await fetch('/api/chat/prompt', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nuevo_prompt: newPrompt })
+        });
+        if (res.ok) {
+            document.getElementById('badge-prompt-status').innerText = 'Guardado';
+            setTimeout(() => document.getElementById('badge-prompt-status').innerText = 'Prompt Activo', 3000);
+            loadPromptConfig(); // recargar historial
+        } else {
+            alert('Error al guardar');
+        }
+    } catch(e) {
+        alert('Error: ' + e);
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
+}
+
+</script>
+<!-- CHAT WIDGET -->
+<div id="asistente-logistico-ui" style="position: fixed; bottom: 20px; right: 20px; z-index: 99999; font-family: 'Roboto', sans-serif;">
+    <!-- Botón flotante -->
+    <button id="asistente-toggle-btn" onclick="toggleAsistente()" style="width: 60px; height: 60px; border-radius: 50%; background: #09567B; color: #fff; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; transition: transform 0.2s;">
+        💬
+    </button>
+    
+    <!-- Ventana del chat -->
+    <div id="asistente-window" style="display: none; position: absolute; bottom: 80px; right: 0; width: 350px; height: 500px; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); flex-direction: column; overflow: hidden; border: 1px solid #e2e8f0;">
+        <div style="background: #09567B; color: #fff; padding: 1rem; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>🤖 Asistente Logístico IA</span>
+            <button onclick="toggleAsistente()" style="background: transparent; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">&times;</button>
+        </div>
+        
+        <div id="asistente-messages" style="flex: 1; padding: 1rem; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 0.5rem;">
+            <div style="align-self: flex-start; background: #e2e8f0; color: #334155; padding: 0.5rem 0.75rem; border-radius: 8px; max-width: 80%; font-size: 0.9rem;">
+                ¡Hola! Soy tu asistente. ¿En qué te puedo ayudar hoy? Puedes preguntarme sobre comunas, centros o metodología.
+            </div>
+        </div>
+        
+        <div style="padding: 0.75rem; border-top: 1px solid #e2e8f0; background: #fff; display: flex; gap: 0.5rem;">
+            <input type="text" id="asistente-input" placeholder="Escribe tu pregunta..." style="flex: 1; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-size: 0.9rem;" onkeypress="if(event.key === 'Enter') enviarMensajeChat()">
+            <button onclick="enviarMensajeChat()" style="background: #09567B; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem;">➤</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let chatHistory = [];
+
+function toggleAsistente() {
+    const w = document.getElementById('asistente-window');
+    w.style.display = w.style.display === 'none' ? 'flex' : 'none';
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Markdown básico (negrita, cursiva, listas, saltos de línea) para las respuestas del
+// asistente. Escapa HTML antes de insertar las etiquetas propias, porque el texto se
+// inserta con innerHTML: sin este escape, cualquier '<' del modelo se interpretaría como HTML.
+function renderMarkdownBasico(text) {
+    let safe = escapeHtml(text);
+    safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    safe = safe.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+
+    const lineas = safe.split('\n');
+    let html = '';
+    let listaTipo = null;
+    lineas.forEach((linea, i) => {
+        const bullet = linea.match(/^\s*[-*]\s+(.*)/);
+        const numerada = linea.match(/^\s*\d+\.\s+(.*)/);
+        if (bullet || numerada) {
+            const tipo = bullet ? 'ul' : 'ol';
+            if (listaTipo !== tipo) {
+                if (listaTipo) html += `</${listaTipo}>`;
+                html += `<${tipo} style="margin:0.3rem 0;padding-left:1.1rem;">`;
+                listaTipo = tipo;
+            }
+            html += `<li>${(bullet || numerada)[1]}</li>`;
+        } else {
+            if (listaTipo) { html += `</${listaTipo}>`; listaTipo = null; }
+            html += (i > 0 ? '<br>' : '') + linea;
+        }
+    });
+    if (listaTipo) html += `</${listaTipo}>`;
+    return html;
+}
+
+function renderMensaje(text, role) {
+    const container = document.getElementById('asistente-messages');
+    const div = document.createElement('div');
+    const isUser = role === 'user';
+    div.style.alignSelf = isUser ? 'flex-end' : 'flex-start';
+    div.style.background = isUser ? '#09567B' : '#e2e8f0';
+    div.style.color = isUser ? '#fff' : '#334155';
+    div.style.padding = '0.5rem 0.75rem';
+    div.style.borderRadius = '8px';
+    div.style.maxWidth = '80%';
+    div.style.fontSize = '0.9rem';
+    div.innerHTML = isUser ? escapeHtml(text) : renderMarkdownBasico(text);
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+async function enviarMensajeChat() {
+    const input = document.getElementById('asistente-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    
+    input.value = '';
+    renderMensaje(msg, 'user');
+    chatHistory.push({ role: 'user', content: msg });
+    
+    const container = document.getElementById('asistente-messages');
+    const loadingId = 'loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.style.alignSelf = 'flex-start';
+    loadingDiv.style.color = '#94a3b8';
+    loadingDiv.style.fontSize = '0.8rem';
+    loadingDiv.style.fontStyle = 'italic';
+    loadingDiv.innerText = 'Pensando...';
+    container.appendChild(loadingDiv);
+    container.scrollTop = container.scrollHeight;
+    
+    try {
+        const res = await fetch('/api/chat/inference', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ historial: chatHistory })
+        });
+        
+        document.getElementById(loadingId).remove();
+        
+        if (res.ok) {
+            const data = await res.json();
+            const textResp = data.respuesta || 'Sin respuesta.';
+            renderMensaje(textResp, 'model');
+            chatHistory.push({ role: 'model', content: textResp });
+        } else {
+            renderMensaje('⚠️ Error de conexión con Vertex AI.', 'model');
+        }
+    } catch(e) {
+        document.getElementById(loadingId).remove();
+        renderMensaje('⚠️ Error: ' + e, 'model');
+    }
+}
+</script>
+</body>
+</html>

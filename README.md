@@ -6,6 +6,10 @@ Metropolitana van a superar su propia carga habitual de atenciones respiratorias
 Proyecto Capstone del Diploma en Ciencia de Datos e Inteligencia Artificial,
 Universidad de Chile.
 
+![Panel de resultados del dashboard](docs/img/dashboard-metricas.png)
+
+El panel permite alterar la definición de colapso, la ventana, la severidad y las variables activas, y reentrena en la petición para mostrar el efecto en la misma sesión. La configuración de la captura entrena con 2023 a 2025 y evalúa sobre 2026, que es el arranque por defecto y difiere de la partición del informe.
+
 ## El problema
 
 Cada invierno las urgencias respiratorias saturan la red pública, y eso se planifica: la
@@ -54,6 +58,8 @@ El modelo transfiere a establecimientos que no vio en el entrenamiento. Una vali
 doble holdout, espacial y temporal a la vez, da PR-AUC de 0,881 frente a 0,884 sobre centros
 conocidos.
 
+![Matriz de confusión e importancia de variables](docs/img/dashboard-shap.png)
+
 ## Tres hallazgos
 
 **Los peaks están en otoño, no en invierno.** La prevalencia de colapso es de 0,92 entre las
@@ -61,6 +67,10 @@ semanas 12 y 24, y baja a 0,39 entre la 25 y la 38. Se repite los cuatro años. 
 en la etiqueta: la base móvil son las doce semanas previas, así que en marzo la referencia
 viene del verano y cualquier alza la supera, mientras que en julio la base ya absorbió el
 otoño alto. La etiqueta mide despegue, no carga absoluta.
+
+![Colapsos por semana y ubicación de los centros](docs/img/dashboard-semanal.png)
+
+En el gráfico semanal la banda de otoño concentra barras de 40 a 46 centros en alerta, mientras que la de invierno cae a menos de 20.
 
 **Manda el propio centro; el vecindario quedó eclipsado.** Por SHAP, el factor dominante es
 cuánto se despegó el centro de su valor típico, con peso 1,81 contra 0,56 de la época del
